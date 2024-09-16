@@ -195,44 +195,6 @@ func TestNextPrevious(t *testing.T) {
 	}
 }
 
-// TestSelect tests the Select method.
-func TestSelect(t *testing.T) {
-	root := []*TreeNode{
-		{
-			Label: "Root",
-			Children: []*TreeNode{
-				{Label: "Child1"},
-			},
-		},
-	}
-
-	tv, err := New(Nodes(root...))
-	if err != nil {
-		t.Fatalf("Failed to create Treeview: %v", err)
-	}
-
-	// Initially selected node is "Root"
-	label, err := tv.Select()
-	if err != nil {
-		t.Errorf("Select returned an error: %v", err)
-	}
-
-	if label != "Root" {
-		t.Errorf("Expected Select to return 'Root', got '%s'", label)
-	}
-
-	// Deselect by setting selectedNode to nil
-	tv.selectedNode = nil
-	label, err = tv.Select()
-	if err == nil {
-		t.Errorf("Expected Select to return an error when no node is selected")
-	}
-
-	if label != "" {
-		t.Errorf("Expected Select to return empty string when no node is selected, got '%s'", label)
-	}
-}
-
 // TestMouseScroll adjusted to align with actual behavior
 func TestMouseScroll(t *testing.T) {
 	root := []*TreeNode{

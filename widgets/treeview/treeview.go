@@ -42,25 +42,23 @@ type TreeNode struct {
 // SetShowSpinner safely sets the ShowSpinner flag.
 func (node *TreeNode) SetShowSpinner(value bool) {
 	node.mu.Lock()
-	node.mu.Unlock()
 	node.ShowSpinner = value
 	if !value {
 		node.SpinnerIndex = 0 // Reset spinner index when spinner is turned off
 	}
+	node.mu.Unlock()
 }
 
 // GetShowSpinner safely retrieves the ShowSpinner flag.
 func (node *TreeNode) GetShowSpinner() bool {
-	node.mu.Lock()
-	defer node.mu.Unlock()
 	return node.ShowSpinner
 }
 
 // IncrementSpinner safely increments the SpinnerIndex.
 func (node *TreeNode) IncrementSpinner(totalIcons int) {
 	node.mu.Lock()
-	defer node.mu.Unlock()
 	node.SpinnerIndex = (node.SpinnerIndex + 1) % totalIcons
+	node.mu.Unlock()
 }
 
 // IsRoot checks if the node is a root node.
@@ -180,15 +178,15 @@ func (tv *Treeview) runSpinner() {
 		case <-tv.spinnerTicker.C:
 			tv.mu.Lock()
 			visibleNodes := tv.getVisibleNodesList()
+			tv.mu.Unlock() // Release the Treeview lock before operating on individual nodes
 			for _, node := range visibleNodes {
-				node.mu.Lock()
+				//node.mu.Lock()
 				if node.GetShowSpinner() && len(tv.waitingIcons) > 0 {
 					node.IncrementSpinner(len(tv.waitingIcons))
 					tv.logger.Printf("Spinner updated for node: %s (SpinnerIndex: %d)", node.Label, node.SpinnerIndex)
 				}
-				node.mu.Unlock()
+				//node.mu.Unlock()
 			}
-			tv.mu.Unlock()
 		case <-tv.stopSpinner:
 			return
 		}
@@ -368,9 +366,6 @@ func (tv *Treeview) handleMouseClick(x, y int) error {
 
 // handleNodeClick toggles the expansion state of a node and manages the spinner.
 func (tv *Treeview) handleNodeClick(node *TreeNode) error {
-	// Lock the Treeview before modifying shared fields
-	tv.mu.Lock()
-	defer tv.mu.Unlock()
 	tv.logger.Printf("Handling node click for: %s (ID: %s)", node.Label, node.ID)
 	if len(node.Children) > 0 {
 		// Toggle expansion state
@@ -406,28 +401,21 @@ func (tv *Treeview) Mouse(m *terminalapi.Mouse, meta *widgetapi.EventMeta) error
 	}
 
 	// Adjust coordinates to be relative to the widget's position
-	tv.mu.Lock()
 	x := m.Position.X - tv.position.X
 	y := m.Position.Y - tv.position.Y
-	tv.mu.Unlock()
 
 	switch m.Button {
 	case mouse.ButtonLeft:
-		tv.mu.Lock()
 		now := time.Now()
 		if now.Sub(tv.lastClickTime) < 100*time.Millisecond {
 			// Ignore duplicate click within 100ms
 			tv.logger.Printf("Ignored duplicate ButtonLeft click at (X:%d, Y:%d)", x, y)
-			tv.mu.Unlock()
 			return nil
 		}
 		tv.lastClickTime = now
-		tv.mu.Unlock()
 		tv.logger.Printf("MouseDown event at position: (X:%d, Y:%d)", x, y)
 		return tv.handleMouseClick(x, y)
 	case mouse.ButtonWheelUp:
-		tv.mu.Lock()
-		defer tv.mu.Unlock()
 		tv.logger.Println("Mouse wheel up")
 		if tv.scrollOffset >= ScrollStep {
 			tv.scrollOffset -= ScrollStep
@@ -437,8 +425,6 @@ func (tv *Treeview) Mouse(m *terminalapi.Mouse, meta *widgetapi.EventMeta) error
 		tv.updateVisibleNodes()
 		return nil
 	case mouse.ButtonWheelDown:
-		tv.mu.Lock()
-		defer tv.mu.Unlock()
 		tv.logger.Println("Mouse wheel down")
 		maxOffset := tv.totalContentHeight - tv.canvasHeight
 		if maxOffset < 0 {
@@ -458,11 +444,9 @@ func (tv *Treeview) Mouse(m *terminalapi.Mouse, meta *widgetapi.EventMeta) error
 // Keyboard handles keyboard events.
 func (tv *Treeview) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventMeta) error {
 	tv.mu.Lock()
-	defer tv.mu.Unlock()
-
 	visibleNodes := tv.visibleNodes
 	currentIndex := tv.getSelectedNodeIndex(visibleNodes)
-
+	tv.mu.Unlock()
 	if currentIndex == -1 {
 		if len(visibleNodes) > 0 {
 			tv.selectedNode = visibleNodes[0]
@@ -520,8 +504,8 @@ func (tv *Treeview) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventMeta)
 // SetExpandedState safely sets the ExpandedState flag.
 func (node *TreeNode) SetExpandedState(value bool) {
 	node.mu.Lock()
-	defer node.mu.Unlock()
 	node.ExpandedState = value
+	node.mu.Unlock()
 }
 
 // GetExpandedState safely retrieves the ExpandedState flag.
@@ -582,14 +566,13 @@ func (tv *Treeview) drawLabel(cvs *canvas.Canvas, label string, x, y int, fgColo
 // Draw renders the treeview widget.
 func (tv *Treeview) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 	tv.mu.Lock()
-	defer tv.mu.Unlock()
 	tv.updateVisibleNodes()
-
 	visibleNodes := tv.visibleNodes
 	totalHeight := len(visibleNodes)
 	width := cvs.Area().Dx()
 	tv.canvasWidth = width // Set canvasWidth here
 	tv.canvasHeight = cvs.Area().Dy()
+	tv.mu.Unlock()
 
 	// Log canvas dimensions
 	tv.logger.Printf("Canvas Area: Dx=%d, Dy=%d", tv.canvasWidth, tv.canvasHeight)
@@ -668,19 +651,19 @@ func (tv *Treeview) Options() widgetapi.Options {
 // Select returns the label of the selected node.
 func (tv *Treeview) Select() (string, error) {
 	tv.mu.Lock()
-	defer tv.mu.Unlock()
 	if tv.selectedNode != nil {
 		return tv.selectedNode.Label, nil
 	}
+	tv.mu.Unlock()
 	return "", errors.New("no option selected")
 }
 
 // Next moves the selection down.
 func (tv *Treeview) Next() {
 	tv.mu.Lock()
-	defer tv.mu.Unlock()
 	visibleNodes := tv.visibleNodes
 	currentIndex := tv.getSelectedNodeIndex(visibleNodes)
+	tv.mu.Unlock()
 	if currentIndex >= 0 && currentIndex < len(visibleNodes)-1 {
 		currentIndex++
 		tv.selectedNode = visibleNodes[currentIndex]
@@ -694,9 +677,9 @@ func (tv *Treeview) Next() {
 // Previous moves the selection up.
 func (tv *Treeview) Previous() {
 	tv.mu.Lock()
-	defer tv.mu.Unlock()
 	visibleNodes := tv.visibleNodes
 	currentIndex := tv.getSelectedNodeIndex(visibleNodes)
+	tv.mu.Unlock()
 	if currentIndex > 0 {
 		currentIndex--
 		tv.selectedNode = visibleNodes[currentIndex]
@@ -814,7 +797,10 @@ func truncateString(s string, maxWidth int) string {
 	ellipsis := "…"
 	ellipsisWidth := runewidth.StringWidth(ellipsis)
 
-	// Start truncating characters from the string
+	if maxWidth <= ellipsisWidth {
+		return ellipsis // Return ellipsis if space is too small
+	}
+
 	truncatedWidth := 0
 	truncatedString := ""
 

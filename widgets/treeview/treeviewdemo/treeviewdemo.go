@@ -188,15 +188,15 @@ func main() {
 	// Create Treeview widget with logging enabled for debugging.
 	tv, err := treeview.New(
 		treeview.Label("Applications Treeview"),
-		treeview.Nodes(processTree...), // Pass as variadic slice.
+		treeview.Nodes(processTree...),
 		treeview.LabelColor(cell.ColorBlue),
 		treeview.CollapsedIcon("▶"),
 		treeview.ExpandedIcon("▼"),
 		treeview.WaitingIcons([]string{"◐", "◓", "◑", "◒"}),
 		treeview.LeafIcon(""),
-		treeview.IndentationPerLevel(2),
-		treeview.Truncate(true),      // Enable truncation.
-		treeview.EnableLogging(false), // Enable logging for debugging.
+		treeview.Indentation(2),
+		treeview.Truncate(true),
+		treeview.EnableLogging(false),
 	)
 	if err != nil {
 		log.Fatalf("failed to create treeview: %v", err)
@@ -334,7 +334,7 @@ func main() {
 	// Run termdash.
 	if err := termdash.Run(ctx, t, c,
 		termdash.KeyboardSubscriber(quitter),
-		termdash.RedrawInterval(100*time.Millisecond),
+		termdash.RedrawInterval(500*time.Millisecond),
 	); err != nil {
 		log.Fatalf("failed to run termdash: %v", err)
 	}
