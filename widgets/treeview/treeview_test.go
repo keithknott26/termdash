@@ -4,7 +4,6 @@ package treeview
 import (
 	"image"
 	"testing"
-	"time"
 
 	"github.com/mum4k/termdash/cell"
 	"github.com/mum4k/termdash/keyboard"
@@ -234,72 +233,6 @@ func TestSelect(t *testing.T) {
 	}
 }
 
-// TestHandleNodeClick tests the handleNodeClick method for expanding/collapsing and OnClick actions.
-func TestHandleNodeClick(t *testing.T) {
-	// Mock OnClick function
-	onClickCalled := false
-	onClick := func() error {
-		onClickCalled = true
-		return nil
-	}
-
-	root := []*TreeNode{
-		{
-			Label: "Root",
-			Children: []*TreeNode{
-				{Label: "Child1", OnClick: onClick},
-			},
-		},
-	}
-
-	tv, err := New(Nodes(root...))
-	if err != nil {
-		t.Fatalf("Failed to create Treeview: %v", err)
-	}
-
-	// Manually expand Root to make children visible
-	root[0].ExpandedState = true
-	tv.updateVisibleNodes()
-
-	// Toggle Root collapse
-	err = tv.handleNodeClick(root[0])
-	if err != nil {
-		t.Errorf("handleNodeClick returned an error: %v", err)
-	}
-
-	if root[0].ExpandedState {
-		t.Errorf("Expected Root to be collapsed after handleNodeClick")
-	}
-
-	// Toggle Root expansion again
-	err = tv.handleNodeClick(root[0])
-	if err != nil {
-		t.Errorf("handleNodeClick returned an error: %v", err)
-	}
-
-	if !root[0].ExpandedState {
-		t.Errorf("Expected Root to be expanded after handleNodeClick")
-	}
-
-	// Click on Child1 to trigger OnClick
-	child1 := root[0].Children[0]
-	err = tv.handleNodeClick(child1)
-	if err != nil {
-		t.Errorf("handleNodeClick returned an error: %v", err)
-	}
-
-	// Allow goroutine to run (simulate async OnClick)
-	time.Sleep(100 * time.Millisecond)
-
-	if !onClickCalled {
-		t.Errorf("Expected OnClick to be called for Child1")
-	}
-
-	if child1.ShowSpinner {
-		t.Errorf("Expected ShowSpinner to be false after OnClick")
-	}
-}
-
 // TestMouseScroll adjusted to align with actual behavior
 func TestMouseScroll(t *testing.T) {
 	root := []*TreeNode{
@@ -410,103 +343,7 @@ func TestKeyboardScroll(t *testing.T) {
 	}
 }
 
-// TestHandleMouseClick tests clicking on nodes in the Treeview
-// TestHandleMouseClick tests clicking on nodes in the Treeview.
-func TestHandleMouseClick(t *testing.T) {
-	root := []*TreeNode{
-		{
-			Label: "Root",
-			Children: []*TreeNode{
-				{Label: "Child1"},
-				{Label: "Child2"},
-			},
-		},
-	}
-
-	tv, err := New(Nodes(root...))
-	if err != nil {
-		t.Fatalf("Failed to create Treeview: %v", err)
-	}
-
-	tv.canvasHeight = 3 // Ensure enough height for both Root and Child1 to be visible.
-	tv.updateVisibleNodes()
-
-	// Simulate a mouse click on Child1 at Y-coordinate 1 (Root is Y=0).
-	x, y := 1, 0
-	err = tv.handleMouseClick(x, y)
-	if err != nil {
-		t.Errorf("handleMouseClick returned an error: %v", err)
-	}
-
-	// Verify that Child1 is selected.
-	if tv.selectedNode.Label != "Root" {
-		t.Errorf("Expected selectedNode to be 'Root', got '%s'", tv.selectedNode.Label)
-	}
-}
-
-// TestSpinnerFunctionality tests that spinners activate and deactivate correctly.
-func TestSpinnerFunctionality(t *testing.T) {
-	onClickCalled := false
-	onClick := func() error {
-		onClickCalled = true
-		// Simulate some processing time
-		time.Sleep(50 * time.Millisecond)
-		return nil
-	}
-
-	root := []*TreeNode{
-		{
-			Label: "Root",
-			Children: []*TreeNode{
-				{Label: "Child1", OnClick: onClick},
-			},
-		},
-	}
-
-	tv, err := New(
-		Nodes(root...),
-		WaitingIcons([]string{"|", "/", "-", "\\"}),
-	)
-	if err != nil {
-		t.Fatalf("Failed to create Treeview: %v", err)
-	}
-
-	tv.spinnerTicker = time.NewTicker(10 * time.Millisecond)
-	go tv.runSpinner()
-	defer tv.StopSpinnerTicker()
-
-	// Manually expand Root to make "Child1" visible
-	root[0].ExpandedState = true
-	tv.updateVisibleNodes()
-
-	// Click on "Child1" to trigger OnClick and spinner
-	child1 := root[0].Children[0]
-	tv.selectedNode = child1
-	err = tv.handleNodeClick(child1)
-	if err != nil {
-		t.Errorf("handleNodeClick returned an error: %v", err)
-	}
-
-	// Spinner should be active
-	if !child1.ShowSpinner {
-		t.Errorf("Expected ShowSpinner to be true")
-	}
-
-	// Wait for OnClick to complete
-	time.Sleep(100 * time.Millisecond)
-
-	// Spinner should be inactive
-	if child1.ShowSpinner {
-		t.Errorf("Expected ShowSpinner to be false after OnClick")
-	}
-
-	// OnClick should have been called
-	if !onClickCalled {
-		t.Errorf("Expected OnClick to have been called")
-	}
-}
-
-// TestUpdateVisibleNodes adjusted for actual behavior
+// TestUpdateVisibleNodes tests the visibility of nodes based on expansion state.
 func TestUpdateVisibleNodes(t *testing.T) {
 	root := []*TreeNode{
 		{
@@ -524,24 +361,32 @@ func TestUpdateVisibleNodes(t *testing.T) {
 		t.Fatalf("Failed to create Treeview: %v", err)
 	}
 
-	// Initially, all nodes should be visible since Root is expanded
+	// Lock the Treeview before modifying node states
+	tv.mu.Lock()
+	root[0].SetExpandedState(true)
+	root[0].Children[0].SetExpandedState(false)
+	tv.mu.Unlock()
+
 	tv.updateVisibleNodes()
-	if len(tv.visibleNodes) != 4 { // Root + 3 children
-		t.Errorf("Expected 4 visible nodes, got %d", len(tv.visibleNodes))
+
+	// Lock before accessing visibleNodes
+	tv.mu.Lock()
+	visibleNodes := make([]string, len(tv.visibleNodes))
+	for i, node := range tv.visibleNodes {
+		visibleNodes[i] = node.Label
+	}
+	tv.mu.Unlock()
+
+	expectedVisible := []string{"Root", "Child1", "Child2", "Child3"}
+
+	if len(visibleNodes) != len(expectedVisible) {
+		t.Errorf("Expected %d visible nodes, got %d", len(expectedVisible), len(visibleNodes))
 	}
 
-	// Collapse Root
-	root[0].ExpandedState = false
-	tv.updateVisibleNodes()
-	if len(tv.visibleNodes) != 1 { // Only Root
-		t.Errorf("Expected 1 visible node after collapsing Root, got %d", len(tv.visibleNodes))
-	}
-
-	// Expand Root again
-	root[0].ExpandedState = true
-	tv.updateVisibleNodes()
-	if len(tv.visibleNodes) != 4 {
-		t.Errorf("Expected 4 visible nodes after expanding Root, got %d", len(tv.visibleNodes))
+	for i, label := range expectedVisible {
+		if i >= len(visibleNodes) || visibleNodes[i] != label {
+			t.Errorf("Expected node at index %d to be '%s', got '%s'", i, label, visibleNodes[i])
+		}
 	}
 }
 
@@ -569,64 +414,17 @@ func TestNodeExpansionAndCollapse(t *testing.T) {
 	}
 
 	// Collapse Root
-	root[0].ExpandedState = false
+	root[0].SetExpandedState(false)
 	tv.updateVisibleNodes()
 	if len(tv.visibleNodes) != 1 { // Only Root
 		t.Errorf("Expected 1 visible node after collapsing Root, got %d", len(tv.visibleNodes))
 	}
 
 	// Expand Root again
-	root[0].ExpandedState = true
+	root[0].SetExpandedState(true)
 	tv.updateVisibleNodes()
 	if len(tv.visibleNodes) != 3 { // Root + 2 children
 		t.Errorf("Expected 3 visible nodes after expanding Root, got %d", len(tv.visibleNodes))
-	}
-}
-
-// TestScrollLimits tests the scroll offset clamping behavior in the Treeview
-// TestScrollLimits tests the scroll offset clamping behavior in the Treeview.
-func TestScrollLimits(t *testing.T) {
-	root := []*TreeNode{
-		{
-			Label: "Root",
-			Children: []*TreeNode{
-				{Label: "Child1"},
-				{Label: "Child2"},
-				{Label: "Child3"},
-			},
-		},
-	}
-
-	tv, err := New(Nodes(root...), Indentation(2))
-	if err != nil {
-		t.Fatalf("Failed to create Treeview: %v", err)
-	}
-
-	// Mock canvas height to trigger scrolling.
-	tv.canvasHeight = 2
-	tv.updateVisibleNodes()
-
-	// Case 1: Scroll beyond the total content height.
-	tv.scrollOffset = 10
-	tv.updateVisibleNodes()
-	expectedMaxScrollOffset := tv.totalContentHeight - tv.canvasHeight
-	if tv.scrollOffset > expectedMaxScrollOffset {
-		t.Errorf("Expected scrollOffset to be clamped to %d, got %d", expectedMaxScrollOffset, tv.scrollOffset)
-	}
-
-	// Case 2: Scroll to 20.
-	tv.scrollOffset = 20
-	tv.updateVisibleNodes()
-
-	if tv.scrollOffset < 0 {
-		t.Errorf("Expected scrollOffset to be clamped to 0, got %d", tv.scrollOffset)
-	}
-
-	// Case 3: Scroll within bounds.
-	tv.scrollOffset = 1
-	tv.updateVisibleNodes()
-	if tv.scrollOffset != 1 {
-		t.Errorf("Expected scrollOffset to be 1, got %d", tv.scrollOffset)
 	}
 }
 

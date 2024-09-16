@@ -42,7 +42,7 @@ type TreeNode struct {
 // SetShowSpinner safely sets the ShowSpinner flag.
 func (node *TreeNode) SetShowSpinner(value bool) {
 	node.mu.Lock()
-	defer node.mu.Unlock()
+	node.mu.Unlock()
 	node.ShowSpinner = value
 	if !value {
 		node.SpinnerIndex = 0 // Reset spinner index when spinner is turned off
@@ -181,10 +181,12 @@ func (tv *Treeview) runSpinner() {
 			tv.mu.Lock()
 			visibleNodes := tv.getVisibleNodesList()
 			for _, node := range visibleNodes {
+				node.mu.Lock()
 				if node.GetShowSpinner() && len(tv.waitingIcons) > 0 {
 					node.IncrementSpinner(len(tv.waitingIcons))
 					tv.logger.Printf("Spinner updated for node: %s (SpinnerIndex: %d)", node.Label, node.SpinnerIndex)
 				}
+				node.mu.Unlock()
 			}
 			tv.mu.Unlock()
 		case <-tv.stopSpinner:
@@ -205,7 +207,7 @@ func (tv *Treeview) StopSpinnerTicker() {
 func setInitialExpandedState(tv *Treeview, expandRoot bool) {
 	for _, node := range tv.opts.nodes {
 		if node.IsRoot() {
-			node.ExpandedState = expandRoot
+			node.SetExpandedState(expandRoot)
 		}
 	}
 	tv.updateTotalHeight()
@@ -243,7 +245,7 @@ func (tv *Treeview) getVisibleNodesList() []*TreeNode {
 	traverse = func(node *TreeNode) {
 		list = append(list, node)
 		tv.logger.Printf("Visible Node Added: '%s' at Level %d", node.Label, node.Level)
-		if node.ExpandedState {
+		if node.GetExpandedState() { // Use getter with mutex
 			for _, child := range node.Children {
 				traverse(child)
 			}
@@ -366,10 +368,13 @@ func (tv *Treeview) handleMouseClick(x, y int) error {
 
 // handleNodeClick toggles the expansion state of a node and manages the spinner.
 func (tv *Treeview) handleNodeClick(node *TreeNode) error {
+	// Lock the Treeview before modifying shared fields
+	tv.mu.Lock()
+	defer tv.mu.Unlock()
 	tv.logger.Printf("Handling node click for: %s (ID: %s)", node.Label, node.ID)
 	if len(node.Children) > 0 {
 		// Toggle expansion state
-		node.ExpandedState = !node.ExpandedState
+		node.SetExpandedState(!node.GetExpandedState())
 		tv.updateTotalHeight()
 		tv.logger.Printf("Toggled expansion for node: %s to %v", node.Label, node.ExpandedState)
 		return nil
@@ -510,6 +515,20 @@ func (tv *Treeview) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventMeta)
 	}
 
 	return nil
+}
+
+// SetExpandedState safely sets the ExpandedState flag.
+func (node *TreeNode) SetExpandedState(value bool) {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	node.ExpandedState = value
+}
+
+// GetExpandedState safely retrieves the ExpandedState flag.
+func (node *TreeNode) GetExpandedState() bool {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	return node.ExpandedState
 }
 
 // getSelectedNodeIndex returns the index of the selected node in the visibleNodes list.
