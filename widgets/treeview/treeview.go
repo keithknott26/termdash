@@ -1,4 +1,3 @@
-// treeview.go
 package treeview
 
 import (
@@ -20,8 +19,9 @@ import (
 	"github.com/mum4k/termdash/widgetapi"
 )
 
+// Number of nodes to scroll per mouse wheel event
 const (
-	ScrollStep = 5 // Number of nodes to scroll per mouse wheel event
+	ScrollStep = 5
 )
 
 // TreeNode represents a node in the treeview.
@@ -259,15 +259,16 @@ func (tv *Treeview) getVisibleNodesList() []*TreeNode {
 func (tv *Treeview) getNodePrefix(node *TreeNode) string {
 	if node.GetShowSpinner() && len(tv.waitingIcons) > 0 {
 		return tv.waitingIcons[node.SpinnerIndex]
-	} else if len(node.Children) > 0 {
+	}
+
+	if len(node.Children) > 0 {
 		if node.ExpandedState {
 			return tv.expandedIcon
-		} else {
-			return tv.collapsedIcon
 		}
-	} else {
-		return tv.leafIcon
+		return tv.collapsedIcon
 	}
+
+	return tv.leafIcon
 }
 
 // drawNode draws nodes based on the nodesToDraw slice.

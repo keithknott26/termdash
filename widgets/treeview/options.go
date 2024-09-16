@@ -1,4 +1,3 @@
-// options.go
 package treeview
 
 import "github.com/mum4k/termdash/cell"
