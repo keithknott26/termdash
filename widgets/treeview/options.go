@@ -2,30 +2,31 @@ package treeview
 
 import "github.com/mum4k/termdash/cell"
 
-// Option represents a configuration option for the Treeview.
+// Option represents a configuration option for the TreeView.
 type Option func(*options)
 
-// options holds the configuration for the Treeview.
+// options holds the configuration for the TreeView.
 type options struct {
-	nodes         []*TreeNode
-	labelColor    cell.Color
-	expandedIcon  string
+	// nodes are the root nodes of the TreeView.
+	nodes []*TreeNode
+	// labelColor is the color of the node labels.
+	labelColor cell.Color
+	// expandedIcon is the icon used for expanded nodes.
+	expandedIcon string
+	// collapsedIcon is the icon used for collapsed nodes.
 	collapsedIcon string
-	leafIcon      string
-	indentation   int
-	waitingIcons  []string
-	truncate      bool
+	// leafIcon is the icon used for leaf nodes.
+	leafIcon string
+	// indentation is the number of spaces per indentation level.
+	indentation int
+	// waitingIcons are the icons used for the spinner.
+	waitingIcons []string
+	// truncate indicates whether to truncate long labels.
+	truncate bool
+	// enableLogging enables or disables logging for debugging.
 	enableLogging bool
 }
 
-// newOptions initializes default options.
-// Sample spinners:
-// []string{'←','↖','↑','↗','→','↘','↓','↙'}
-// []string{'◰','◳','◲','◱'}
-// []string{'◴','◷','◶','◵'}
-// []string{'◐','◓','◑','◒'}
-// []string{'x','+'}
-// []string{'⣾','⣽','⣻','⢿','⡿','⣟','⣯','⣷'}
 // newOptions initializes default options.
 func newOptions() *options {
 	return &options{
@@ -40,7 +41,7 @@ func newOptions() *options {
 	}
 }
 
-// Nodes sets the root nodes of the Treeview.
+// Nodes sets the root nodes of the TreeView.
 func Nodes(nodes ...*TreeNode) Option {
 	return func(o *options) {
 		o.nodes = nodes
@@ -95,7 +96,7 @@ func EnableLogging(enable bool) Option {
 // Note: If the widget's label is managed by the container, this can be a no-op.
 func Label(label string) Option {
 	return func(o *options) {
-		// No action needed, label is set in container's BorderTitle.
+		// No action needed; label is set in container's BorderTitle.
 	}
 }
 

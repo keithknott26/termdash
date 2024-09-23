@@ -19,78 +19,124 @@ import (
 	"github.com/mum4k/termdash/widgetapi"
 )
 
-// Number of nodes to scroll per mouse wheel event
+// Number of nodes to scroll per mouse wheel event.
 const (
 	ScrollStep = 5
 )
 
 // TreeNode represents a node in the treeview.
 type TreeNode struct {
-	ID            string
-	Label         string
-	Level         int
-	Parent        *TreeNode
-	Children      []*TreeNode
-	Value         interface{} // Can hold any data type
-	ShowSpinner   bool
-	OnClick       func() error
-	ExpandedState bool // Unique expanded state for each node
-	SpinnerIndex  int  // Current index for spinner icons
-	mu            sync.Mutex
+	// ID is the unique identifier for the node.
+	ID string
+	// Label is the display text of the node.
+	Label string
+	// Level is the depth level of the node in the tree.
+	Level int
+	// Parent is the parent node of this node.
+	Parent *TreeNode
+	// Children are the child nodes of this node.
+	Children []*TreeNode
+	// Value holds any data associated with the node.
+	Value interface{}
+	// ShowSpinner indicates whether to display a spinner for this node.
+	ShowSpinner bool
+	// OnClick is the function to execute when the node is clicked.
+	OnClick func() error
+	// ExpandedState indicates whether the node is expanded to show its children.
+	ExpandedState bool
+	// SpinnerIndex is the current index for the spinner icons.
+	SpinnerIndex int
+	// mu protects access to the node's fields.
+	mu sync.Mutex
 }
 
 // SetShowSpinner safely sets the ShowSpinner flag.
-func (node *TreeNode) SetShowSpinner(value bool) {
-	node.mu.Lock()
-	node.ShowSpinner = value
+func (tn *TreeNode) SetShowSpinner(value bool) {
+	tn.mu.Lock()
+	defer tn.mu.Unlock()
+	tn.ShowSpinner = value
 	if !value {
-		node.SpinnerIndex = 0 // Reset spinner index when spinner is turned off
+		tn.SpinnerIndex = 0 // Reset spinner index when spinner is turned off
 	}
-	node.mu.Unlock()
 }
 
 // GetShowSpinner safely retrieves the ShowSpinner flag.
-func (node *TreeNode) GetShowSpinner() bool {
-	return node.ShowSpinner
+func (tn *TreeNode) GetShowSpinner() bool {
+	tn.mu.Lock()
+	defer tn.mu.Unlock()
+	return tn.ShowSpinner
 }
 
 // IncrementSpinner safely increments the SpinnerIndex.
-func (node *TreeNode) IncrementSpinner(totalIcons int) {
-	node.mu.Lock()
-	node.SpinnerIndex = (node.SpinnerIndex + 1) % totalIcons
-	node.mu.Unlock()
+func (tn *TreeNode) IncrementSpinner(totalIcons int) {
+	tn.mu.Lock()
+	defer tn.mu.Unlock()
+	tn.SpinnerIndex = (tn.SpinnerIndex + 1) % totalIcons
 }
 
 // IsRoot checks if the node is a root node.
-func (node *TreeNode) IsRoot() bool {
-	return node.Parent == nil
+func (tn *TreeNode) IsRoot() bool {
+	return tn.Parent == nil
 }
 
-// Treeview represents the treeview widget.
-type Treeview struct {
-	mu                  sync.Mutex
-	position            image.Point // Stores the widget's top-left position
-	opts                *options
-	selectedNode        *TreeNode
-	visibleNodes        []*TreeNode
-	logger              *log.Logger
-	spinnerTicker       *time.Ticker
-	stopSpinner         chan struct{}
-	expandedIcon        string
-	collapsedIcon       string
-	leafIcon            string
-	scrollOffset        int
+// SetExpandedState safely sets the ExpandedState flag.
+func (tn *TreeNode) SetExpandedState(value bool) {
+	tn.mu.Lock()
+	defer tn.mu.Unlock()
+	tn.ExpandedState = value
+}
+
+// GetExpandedState safely retrieves the ExpandedState flag.
+func (tn *TreeNode) GetExpandedState() bool {
+	tn.mu.Lock()
+	defer tn.mu.Unlock()
+	return tn.ExpandedState
+}
+
+// TreeView represents the treeview widget.
+type TreeView struct {
+	// mu protects access to the TreeView's fields.
+	mu sync.Mutex
+	// position stores the widget's top-left position.
+	position image.Point
+	// opts holds the configuration options for the TreeView.
+	opts *options
+	// selectedNode is the currently selected node.
+	selectedNode *TreeNode
+	// visibleNodes is the list of currently visible nodes.
+	visibleNodes []*TreeNode
+	// logger logs debugging information.
+	logger *log.Logger
+	// spinnerTicker updates spinner indices periodically.
+	spinnerTicker *time.Ticker
+	// stopSpinner signals the spinner goroutine to stop.
+	stopSpinner chan struct{}
+	// expandedIcon is the icon used for expanded nodes.
+	expandedIcon string
+	// collapsedIcon is the icon used for collapsed nodes.
+	collapsedIcon string
+	// leafIcon is the icon used for leaf nodes.
+	leafIcon string
+	// scrollOffset is the current vertical scroll offset.
+	scrollOffset int
+	// indentationPerLevel is the number of spaces to indent per tree level.
 	indentationPerLevel int
-	canvasWidth         int
-	canvasHeight        int
-	totalContentHeight  int
-	waitingIcons        []string
-	lastClickTime       time.Time // Timestamp of the last handled click
-	lastKeyTime         time.Time // Timestamp for debouncing the enter key
+	// canvasWidth is the width of the canvas.
+	canvasWidth int
+	// canvasHeight is the height of the canvas.
+	canvasHeight int
+	// totalContentHeight is the total height of the content.
+	totalContentHeight int
+	// waitingIcons are the icons used for the spinner.
+	waitingIcons []string
+	// lastClickTime is the timestamp of the last handled click.
+	lastClickTime time.Time
+	// lastKeyTime is the timestamp for debouncing the enter key.
+	lastKeyTime time.Time
 }
 
-// New creates a new Treeview instance.
-func New(opts ...Option) (*Treeview, error) {
+// New creates a new TreeView instance.
+func New(opts ...Option) (*TreeView, error) {
 	options := newOptions()
 	for _, opt := range opts {
 		opt(options)
@@ -123,7 +169,7 @@ func New(opts ...Option) (*Treeview, error) {
 		logger = log.New(io.Discard, "", 0)
 	}
 
-	tv := &Treeview{
+	tv := &TreeView{
 		opts:                options,
 		logger:              logger,
 		stopSpinner:         make(chan struct{}),
@@ -160,32 +206,30 @@ func generateNodeID(path string, label string) string {
 }
 
 // setParentsAndAssignIDs assigns parent references, levels, and IDs to nodes recursively.
-func setParentsAndAssignIDs(node *TreeNode, parent *TreeNode, level int, path string) {
-	node.Parent = parent
-	node.Level = level
+func setParentsAndAssignIDs(tn *TreeNode, parent *TreeNode, level int, path string) {
+	tn.Parent = parent
+	tn.Level = level
 
-	node.ID = generateNodeID(path, node.Label)
+	tn.ID = generateNodeID(path, tn.Label)
 
-	for _, child := range node.Children {
-		setParentsAndAssignIDs(child, node, level+1, node.ID)
+	for _, child := range tn.Children {
+		setParentsAndAssignIDs(child, tn, level+1, tn.ID)
 	}
 }
 
 // runSpinner updates spinner indices periodically.
-func (tv *Treeview) runSpinner() {
+func (tv *TreeView) runSpinner() {
 	for {
 		select {
 		case <-tv.spinnerTicker.C:
 			tv.mu.Lock()
 			visibleNodes := tv.getVisibleNodesList()
-			tv.mu.Unlock() // Release the Treeview lock before operating on individual nodes
-			for _, node := range visibleNodes {
-				//node.mu.Lock()
-				if node.GetShowSpinner() && len(tv.waitingIcons) > 0 {
-					node.IncrementSpinner(len(tv.waitingIcons))
-					tv.logger.Printf("Spinner updated for node: %s (SpinnerIndex: %d)", node.Label, node.SpinnerIndex)
+			tv.mu.Unlock() // Release the TreeView lock before operating on individual nodes
+			for _, tn := range visibleNodes {
+				if tn.GetShowSpinner() && len(tv.waitingIcons) > 0 {
+					tn.IncrementSpinner(len(tv.waitingIcons))
+					tv.logger.Printf("Spinner updated for node: %s (SpinnerIndex: %d)", tn.Label, tn.SpinnerIndex)
 				}
-				//node.mu.Unlock()
 			}
 		case <-tv.stopSpinner:
 			return
@@ -194,7 +238,7 @@ func (tv *Treeview) runSpinner() {
 }
 
 // StopSpinnerTicker stops the spinner ticker.
-func (tv *Treeview) StopSpinnerTicker() {
+func (tv *TreeView) StopSpinnerTicker() {
 	if tv.spinnerTicker != nil {
 		tv.spinnerTicker.Stop()
 		close(tv.stopSpinner)
@@ -202,20 +246,20 @@ func (tv *Treeview) StopSpinnerTicker() {
 }
 
 // setInitialExpandedState sets the initial expanded state for root nodes.
-func setInitialExpandedState(tv *Treeview, expandRoot bool) {
-	for _, node := range tv.opts.nodes {
-		if node.IsRoot() {
-			node.SetExpandedState(expandRoot)
+func setInitialExpandedState(tv *TreeView, expandRoot bool) {
+	for _, tn := range tv.opts.nodes {
+		if tn.IsRoot() {
+			tn.SetExpandedState(expandRoot)
 		}
 	}
 	tv.updateTotalHeight()
 }
 
 // calculateHeight calculates the height of a node, including its children if expanded.
-func (tv *Treeview) calculateHeight(node *TreeNode) int {
+func (tv *TreeView) calculateHeight(tn *TreeNode) int {
 	height := 1 // Start with the height of the current node
-	if node.ExpandedState {
-		for _, child := range node.Children {
+	if tn.ExpandedState {
+		for _, child := range tn.Children {
 			height += tv.calculateHeight(child)
 		}
 	}
@@ -223,7 +267,7 @@ func (tv *Treeview) calculateHeight(node *TreeNode) int {
 }
 
 // calculateTotalHeight calculates the total height of all visible nodes.
-func (tv *Treeview) calculateTotalHeight() int {
+func (tv *TreeView) calculateTotalHeight() int {
 	totalHeight := 0
 	for _, rootNode := range tv.opts.nodes {
 		totalHeight += tv.calculateHeight(rootNode)
@@ -232,19 +276,19 @@ func (tv *Treeview) calculateTotalHeight() int {
 }
 
 // updateTotalHeight updates the totalContentHeight based on visible nodes.
-func (tv *Treeview) updateTotalHeight() {
+func (tv *TreeView) updateTotalHeight() {
 	tv.totalContentHeight = tv.calculateTotalHeight()
 }
 
 // getVisibleNodesList retrieves a flat list of all currently visible nodes.
-func (tv *Treeview) getVisibleNodesList() []*TreeNode {
+func (tv *TreeView) getVisibleNodesList() []*TreeNode {
 	var list []*TreeNode
-	var traverse func(node *TreeNode)
-	traverse = func(node *TreeNode) {
-		list = append(list, node)
-		tv.logger.Printf("Visible Node Added: '%s' at Level %d", node.Label, node.Level)
-		if node.GetExpandedState() { // Use getter with mutex
-			for _, child := range node.Children {
+	var traverse func(tn *TreeNode)
+	traverse = func(tn *TreeNode) {
+		list = append(list, tn)
+		tv.logger.Printf("Visible Node Added: '%s' at Level %d", tn.Label, tn.Level)
+		if tn.GetExpandedState() { // Use getter with mutex
+			for _, child := range tn.Children {
 				traverse(child)
 			}
 		}
@@ -256,13 +300,13 @@ func (tv *Treeview) getVisibleNodesList() []*TreeNode {
 }
 
 // getNodePrefix returns the appropriate prefix for a node based on its state.
-func (tv *Treeview) getNodePrefix(node *TreeNode) string {
-	if node.GetShowSpinner() && len(tv.waitingIcons) > 0 {
-		return tv.waitingIcons[node.SpinnerIndex]
+func (tv *TreeView) getNodePrefix(tn *TreeNode) string {
+	if tn.GetShowSpinner() && len(tv.waitingIcons) > 0 {
+		return tv.waitingIcons[tn.SpinnerIndex]
 	}
 
-	if len(node.Children) > 0 {
-		if node.ExpandedState {
+	if len(tn.Children) > 0 {
+		if tn.ExpandedState {
 			return tv.expandedIcon
 		}
 		return tv.collapsedIcon
@@ -272,19 +316,19 @@ func (tv *Treeview) getNodePrefix(node *TreeNode) string {
 }
 
 // drawNode draws nodes based on the nodesToDraw slice.
-func (tv *Treeview) drawNode(cvs *canvas.Canvas, nodesToDraw []*TreeNode) error {
-	for y, node := range nodesToDraw {
+func (tv *TreeView) drawNode(cvs *canvas.Canvas, nodesToDraw []*TreeNode) error {
+	for y, tn := range nodesToDraw {
 		// Determine if this node is selected
-		isSelected := (node.ID == tv.selectedNode.ID)
+		isSelected := (tn.ID == tv.selectedNode.ID)
 
 		// Get the prefix based on node state
-		prefix := tv.getNodePrefix(node)
+		prefix := tv.getNodePrefix(tn)
 		prefixWidth := runewidth.StringWidth(prefix)
 
 		// Construct the label
-		label := fmt.Sprintf("%s %s", prefix, node.Label)
+		label := fmt.Sprintf("%s %s", prefix, tn.Label)
 		labelWidth := runewidth.StringWidth(label)
-		indentX := node.Level * tv.indentationPerLevel
+		indentX := tn.Level * tv.indentationPerLevel
 		availableWidth := tv.canvasWidth - indentX
 
 		if tv.opts.truncate && labelWidth > availableWidth {
@@ -297,7 +341,7 @@ func (tv *Treeview) drawNode(cvs *canvas.Canvas, nodesToDraw []*TreeNode) error 
 		}
 
 		// Log prefix width for debugging
-		tv.logger.Printf("Drawing node '%s' with prefix width %d", node.Label, prefixWidth)
+		tv.logger.Printf("Drawing node '%s' with prefix width %d", tn.Label, prefixWidth)
 
 		// Determine colors based on selection
 		var fgColor cell.Color = tv.opts.labelColor
@@ -316,17 +360,17 @@ func (tv *Treeview) drawNode(cvs *canvas.Canvas, nodesToDraw []*TreeNode) error 
 }
 
 // findNodeByClick determines which node was clicked based on x and y coordinates.
-func (tv *Treeview) findNodeByClick(x, y int, visibleNodes []*TreeNode) *TreeNode {
+func (tv *TreeView) findNodeByClick(x, y int, visibleNodes []*TreeNode) *TreeNode {
 	clickedIndex := y + tv.scrollOffset // Adjust Y-coordinate based on scroll offset
 	if clickedIndex < 0 || clickedIndex >= len(visibleNodes) {
 		return nil
 	}
 
-	node := visibleNodes[clickedIndex]
+	tn := visibleNodes[clickedIndex]
 
-	label := fmt.Sprintf("%s %s", tv.getNodePrefix(node), node.Label)
+	label := fmt.Sprintf("%s %s", tv.getNodePrefix(tn), tn.Label)
 	labelWidth := runewidth.StringWidth(label)
-	indentX := node.Level * tv.indentationPerLevel
+	indentX := tn.Level * tv.indentationPerLevel
 	availableWidth := tv.canvasWidth - indentX
 
 	if tv.opts.truncate && labelWidth > availableWidth {
@@ -339,15 +383,15 @@ func (tv *Treeview) findNodeByClick(x, y int, visibleNodes []*TreeNode) *TreeNod
 	labelEndX := labelStartX + labelWidth
 
 	if x >= labelStartX && x < labelEndX {
-		tv.logger.Printf("Node '%s' (ID: %s) clicked at [X:%d Y:%d]", node.Label, node.ID, x, y)
-		return node
+		tv.logger.Printf("Node '%s' (ID: %s) clicked at [X:%d Y:%d]", tn.Label, tn.ID, x, y)
+		return tn
 	}
 
 	return nil
 }
 
 // handleMouseClick processes mouse click at given x, y coordinates.
-func (tv *Treeview) handleMouseClick(x, y int) error {
+func (tv *TreeView) handleMouseClick(x, y int) error {
 	tv.logger.Printf("Handling mouse click at (X:%d, Y:%d)", x, y)
 	visibleNodes := tv.visibleNodes
 	clickedNode := tv.findNodeByClick(x, y, visibleNodes)
@@ -366,20 +410,20 @@ func (tv *Treeview) handleMouseClick(x, y int) error {
 }
 
 // handleNodeClick toggles the expansion state of a node and manages the spinner.
-func (tv *Treeview) handleNodeClick(node *TreeNode) error {
-	tv.logger.Printf("Handling node click for: %s (ID: %s)", node.Label, node.ID)
-	if len(node.Children) > 0 {
+func (tv *TreeView) handleNodeClick(tn *TreeNode) error {
+	tv.logger.Printf("Handling node click for: %s (ID: %s)", tn.Label, tn.ID)
+	if len(tn.Children) > 0 {
 		// Toggle expansion state
-		node.SetExpandedState(!node.GetExpandedState())
+		tn.SetExpandedState(!tn.GetExpandedState())
 		tv.updateTotalHeight()
-		tv.logger.Printf("Toggled expansion for node: %s to %v", node.Label, node.ExpandedState)
+		tv.logger.Printf("Toggled expansion for node: %s to %v", tn.Label, tn.ExpandedState)
 		return nil
 	}
 
 	// Handle leaf node click
-	if node.OnClick != nil {
-		node.SetShowSpinner(true)
-		tv.logger.Printf("Spinner started for node: %s", node.Label)
+	if tn.OnClick != nil {
+		tn.SetShowSpinner(true)
+		tv.logger.Printf("Spinner started for node: %s", tn.Label)
 		go func(n *TreeNode) {
 			tv.logger.Printf("Executing OnClick for node: %s", n.Label)
 			if err := n.OnClick(); err != nil {
@@ -387,7 +431,7 @@ func (tv *Treeview) handleNodeClick(node *TreeNode) error {
 			}
 			n.SetShowSpinner(false)
 			tv.logger.Printf("Spinner stopped for node: %s", n.Label)
-		}(node)
+		}(tn)
 	}
 
 	return nil
@@ -395,7 +439,8 @@ func (tv *Treeview) handleNodeClick(node *TreeNode) error {
 
 // Mouse handles mouse events with debouncing for ButtonLeft clicks.
 // It processes mouse press events and mouse wheel events.
-func (tv *Treeview) Mouse(m *terminalapi.Mouse, meta *widgetapi.EventMeta) error {
+func (tv *TreeView) Mouse(m *terminalapi.Mouse, meta *widgetapi.EventMeta) error {
+
 	// Ignore mouse release events to avoid handling multiple events per physical click
 	if m.Button == mouse.ButtonRelease {
 		return nil
@@ -443,7 +488,7 @@ func (tv *Treeview) Mouse(m *terminalapi.Mouse, meta *widgetapi.EventMeta) error
 }
 
 // Keyboard handles keyboard events.
-func (tv *Treeview) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventMeta) error {
+func (tv *TreeView) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventMeta) error {
 	tv.mu.Lock()
 	visibleNodes := tv.visibleNodes
 	currentIndex := tv.getSelectedNodeIndex(visibleNodes)
@@ -489,9 +534,9 @@ func (tv *Treeview) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventMeta)
 		}
 	case keyboard.KeyEnter, ' ':
 		if currentIndex >= 0 && currentIndex < len(visibleNodes) {
-			node := visibleNodes[currentIndex]
-			tv.selectedNode = node
-			if err := tv.handleNodeClick(node); err != nil {
+			tn := visibleNodes[currentIndex]
+			tv.selectedNode = tn
+			if err := tv.handleNodeClick(tn); err != nil {
 				tv.logger.Println("Error handling node click:", err)
 			}
 		}
@@ -502,24 +547,10 @@ func (tv *Treeview) Keyboard(k *terminalapi.Keyboard, meta *widgetapi.EventMeta)
 	return nil
 }
 
-// SetExpandedState safely sets the ExpandedState flag.
-func (node *TreeNode) SetExpandedState(value bool) {
-	node.mu.Lock()
-	node.ExpandedState = value
-	node.mu.Unlock()
-}
-
-// GetExpandedState safely retrieves the ExpandedState flag.
-func (node *TreeNode) GetExpandedState() bool {
-	node.mu.Lock()
-	defer node.mu.Unlock()
-	return node.ExpandedState
-}
-
 // getSelectedNodeIndex returns the index of the selected node in the visibleNodes list.
-func (tv *Treeview) getSelectedNodeIndex(visibleNodes []*TreeNode) int {
-	for idx, node := range visibleNodes {
-		if node.ID == tv.selectedNode.ID {
+func (tv *TreeView) getSelectedNodeIndex(visibleNodes []*TreeNode) int {
+	for idx, tn := range visibleNodes {
+		if tn.ID == tv.selectedNode.ID {
 			return idx
 		}
 	}
@@ -527,7 +558,7 @@ func (tv *Treeview) getSelectedNodeIndex(visibleNodes []*TreeNode) int {
 }
 
 // drawScrollUp draws the scroll up indicator.
-func (tv *Treeview) drawScrollUp(cvs *canvas.Canvas) error {
+func (tv *TreeView) drawScrollUp(cvs *canvas.Canvas) error {
 	if _, err := cvs.SetCell(image.Point{X: 0, Y: 0}, '↑', cell.FgColor(cell.ColorWhite)); err != nil {
 		return err
 	}
@@ -535,7 +566,7 @@ func (tv *Treeview) drawScrollUp(cvs *canvas.Canvas) error {
 }
 
 // drawScrollDown draws the scroll down indicator.
-func (tv *Treeview) drawScrollDown(cvs *canvas.Canvas) error {
+func (tv *TreeView) drawScrollDown(cvs *canvas.Canvas) error {
 	if _, err := cvs.SetCell(image.Point{X: 0, Y: cvs.Area().Dy() - 1}, '↓', cell.FgColor(cell.ColorWhite)); err != nil {
 		return err
 	}
@@ -543,7 +574,7 @@ func (tv *Treeview) drawScrollDown(cvs *canvas.Canvas) error {
 }
 
 // drawLabel draws the label of a node at the specified position with given foreground and background colors.
-func (tv *Treeview) drawLabel(cvs *canvas.Canvas, label string, x, y int, fgColor, bgColor cell.Color) error {
+func (tv *TreeView) drawLabel(cvs *canvas.Canvas, label string, x, y int, fgColor, bgColor cell.Color) error {
 	tv.logger.Printf("Drawing label: '%s' at X: %d, Y: %d with FG: %v, BG: %v", label, x, y, fgColor, bgColor)
 	displayWidth := runewidth.StringWidth(label)
 	if x+displayWidth > cvs.Area().Dx() {
@@ -565,7 +596,7 @@ func (tv *Treeview) drawLabel(cvs *canvas.Canvas, label string, x, y int, fgColo
 }
 
 // Draw renders the treeview widget.
-func (tv *Treeview) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
+func (tv *TreeView) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 	tv.mu.Lock()
 	tv.updateVisibleNodes()
 	visibleNodes := tv.visibleNodes
@@ -640,7 +671,7 @@ func (tv *Treeview) Draw(cvs *canvas.Canvas, meta *widgetapi.Meta) error {
 }
 
 // Options returns the widget options to satisfy the widgetapi.Widget interface.
-func (tv *Treeview) Options() widgetapi.Options {
+func (tv *TreeView) Options() widgetapi.Options {
 	return widgetapi.Options{
 		MinimumSize:              image.Point{10, 3},
 		WantKeyboard:             widgetapi.KeyScopeFocused,
@@ -650,21 +681,21 @@ func (tv *Treeview) Options() widgetapi.Options {
 }
 
 // Select returns the label of the selected node.
-func (tv *Treeview) Select() (string, error) {
+func (tv *TreeView) Select() (string, error) {
 	tv.mu.Lock()
+	defer tv.mu.Unlock()
 	if tv.selectedNode != nil {
 		return tv.selectedNode.Label, nil
 	}
-	tv.mu.Unlock()
 	return "", errors.New("no option selected")
 }
 
 // Next moves the selection down.
-func (tv *Treeview) Next() {
+func (tv *TreeView) Next() {
 	tv.mu.Lock()
+	defer tv.mu.Unlock()
 	visibleNodes := tv.visibleNodes
 	currentIndex := tv.getSelectedNodeIndex(visibleNodes)
-	tv.mu.Unlock()
 	if currentIndex >= 0 && currentIndex < len(visibleNodes)-1 {
 		currentIndex++
 		tv.selectedNode = visibleNodes[currentIndex]
@@ -676,11 +707,11 @@ func (tv *Treeview) Next() {
 }
 
 // Previous moves the selection up.
-func (tv *Treeview) Previous() {
+func (tv *TreeView) Previous() {
 	tv.mu.Lock()
+	defer tv.mu.Unlock()
 	visibleNodes := tv.visibleNodes
 	currentIndex := tv.getSelectedNodeIndex(visibleNodes)
-	tv.mu.Unlock()
 	if currentIndex > 0 {
 		currentIndex--
 		tv.selectedNode = visibleNodes[currentIndex]
@@ -691,83 +722,14 @@ func (tv *Treeview) Previous() {
 	}
 }
 
-// findNearestVisibleNode finds the nearest visible node in the tree
-func (tv *Treeview) findNearestVisibleNode(currentNode *TreeNode, visibleNodes []*TreeNode) *TreeNode {
-	if currentNode == nil {
-		return nil
-	}
-
-	if currentNode.Parent != nil {
-		parentNode := currentNode.Parent
-		for _, node := range visibleNodes {
-			if node.ID == parentNode.ID {
-				return parentNode
-			}
-		}
-		// If the parent is not visible, recursively search upwards
-		return tv.findNearestVisibleNode(parentNode, visibleNodes)
-	}
-
-	// If at the root and it's not visible, return the first visible node
-	if len(visibleNodes) > 0 {
-		return visibleNodes[0]
-	}
-	return nil // No visible nodes found
-}
-
-// findPreviousVisibleNode finds the previous visible node in the tree
-func (tv *Treeview) findPreviousVisibleNode(currentNode *TreeNode) *TreeNode {
-	if currentNode == nil {
-		return nil
-	}
-
-	if currentNode.Parent == nil {
-		// If at the root, there's no previous node
-		return nil
-	}
-
-	parent := currentNode.Parent
-	siblings := parent.Children
-	currentIndex := -1
-	for i, sibling := range siblings {
-		if sibling.ID == currentNode.ID {
-			currentIndex = i
-			break
-		}
-	}
-
-	if currentIndex == -1 {
-		// Node not found among siblings, something is wrong
-		return nil
-	}
-
-	if currentIndex == 0 {
-		// If the current node is the first child, return the parent
-		return parent
-	}
-
-	previousSibling := siblings[currentIndex-1]
-	return tv.findLastVisibleDescendant(previousSibling)
-}
-
-// findLastVisibleDescendant finds the last visible descendant of a node
-func (tv *Treeview) findLastVisibleDescendant(node *TreeNode) *TreeNode {
-	if !node.ExpandedState || len(node.Children) == 0 {
-		return node
-	}
-	// Since node is expanded and has children, go to the last child
-	lastChild := node.Children[len(node.Children)-1]
-	return tv.findLastVisibleDescendant(lastChild)
-}
-
 // updateVisibleNodes updates the visibleNodes slice based on scrollOffset and node expansion.
-func (tv *Treeview) updateVisibleNodes() {
+func (tv *TreeView) updateVisibleNodes() {
 	var allVisible []*TreeNode
-	var traverse func(node *TreeNode)
-	traverse = func(node *TreeNode) {
-		allVisible = append(allVisible, node)
-		if node.ExpandedState {
-			for _, child := range node.Children {
+	var traverse func(tn *TreeNode)
+	traverse = func(tn *TreeNode) {
+		allVisible = append(allVisible, tn)
+		if tn.ExpandedState {
+			for _, child := range tn.Children {
 				traverse(child)
 			}
 		}

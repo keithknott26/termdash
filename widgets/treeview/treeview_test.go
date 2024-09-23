@@ -4,6 +4,7 @@ package treeview
 import (
 	"image"
 	"testing"
+	"time"
 
 	"github.com/mum4k/termdash/cell"
 	"github.com/mum4k/termdash/keyboard"
@@ -454,5 +455,117 @@ func TestKeyboardNonArrowKeys(t *testing.T) {
 	tv.Keyboard(&terminalapi.Keyboard{Key: 'a'}, &widgetapi.EventMeta{})
 	if tv.selectedNode.Label != "Root" {
 		t.Errorf("Expected selectedNode to remain 'Root', got '%s'", tv.selectedNode.Label)
+	}
+}
+
+// TestRunSpinner tests the runSpinner method.
+func TestRunSpinner(t *testing.T) {
+	root := []*TreeNode{
+		{
+			Label: "Root",
+			Children: []*TreeNode{
+				{Label: "Child1"},
+			},
+		},
+	}
+
+	tv, err := New(
+		Nodes(root...),
+		WaitingIcons([]string{"|", "/", "-", "\\"}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create TreeView: %v", err)
+	}
+
+	// Start spinner on "Child1"
+	root[0].Children[0].SetShowSpinner(true)
+
+	// Wait to allow spinner to update
+	time.Sleep(500 * time.Millisecond)
+
+	// Check that SpinnerIndex has incremented
+	root[0].Children[0].mu.Lock()
+	spinnerIndex := root[0].Children[0].SpinnerIndex
+	root[0].Children[0].mu.Unlock()
+
+	if spinnerIndex == 0 {
+		t.Errorf("Expected SpinnerIndex to have incremented, got %d", spinnerIndex)
+	}
+
+	// Stop the spinner ticker
+	tv.StopSpinnerTicker()
+}
+
+// TestHandleNodeClick tests the handleNodeClick method.
+// TestHandleNodeClick tests the handleNodeClick method.
+func TestHandleNodeClick(t *testing.T) {
+	// Create a channel to signal when OnClick has been executed.
+	clickCh := make(chan struct{})
+
+	// Define the tree structure with an OnClick handler.
+	root := []*TreeNode{
+		{
+			Label: "Root",
+			Children: []*TreeNode{
+				{
+					Label: "Child1",
+					OnClick: func() error {
+						// Signal that OnClick has been called.
+						clickCh <- struct{}{}
+						return nil
+					},
+				},
+			},
+		},
+	}
+
+	// Initialize the TreeView.
+	tv, err := New(
+		Nodes(root...),
+		Indentation(2),
+		Icons("▼", "▶", "•"),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create TreeView: %v", err)
+	}
+
+	// Expand Root to make its children visible.
+	root[0].SetExpandedState(true)
+	tv.updateVisibleNodes()
+
+	// Select "Child1".
+	tv.selectedNode = root[0].Children[0]
+	err = tv.handleNodeClick(tv.selectedNode)
+	if err != nil {
+		t.Errorf("handleNodeClick returned an error: %v", err)
+	}
+
+	// Wait for the OnClick handler to signal completion or timeout after 1 second.
+	select {
+	case <-clickCh:
+		// OnClick was called successfully.
+	case <-time.After(1 * time.Second):
+		t.Errorf("OnClick was not called within the expected time")
+	}
+
+	// Verify that the spinner has been reset.
+	if tv.selectedNode.GetShowSpinner() {
+		t.Errorf("Expected spinner to be false after OnClick execution")
+	}
+}
+
+// TestTruncateString tests the truncateString function.
+func TestTruncateString(t *testing.T) {
+	longString := "This is a very long string that should be truncated"
+	truncated := truncateString(longString, 10)
+
+	if truncated != "This is a…" {
+		t.Errorf("Expected 'This is a…', got '%s'", truncated)
+	}
+
+	// Test with a maxWidth smaller than ellipsis
+	truncated = truncateString(longString, 1)
+	if truncated != "…" {
+		t.Errorf("Expected '…', got '%s'", truncated)
 	}
 }

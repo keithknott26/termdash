@@ -25,11 +25,17 @@ import (
 
 // NodeData holds arbitrary data associated with a tree node.
 type NodeData struct {
-	Label           string
-	PID             int
-	CPUUsage        []int
-	MemoryUsage     int
-	LastCPUUsage    int
+	// Label is the label of the node.
+	Label string
+	// PID is the process ID associated with the node.
+	PID int
+	// CPUUsage is a slice of CPU usage percentages.
+	CPUUsage []int
+	// MemoryUsage is the current memory usage percentage.
+	MemoryUsage int
+	// LastCPUUsage is the last recorded CPU usage percentage.
+	LastCPUUsage int
+	// LastMemoryUsage is the last recorded memory usage percentage.
 	LastMemoryUsage int
 }
 
@@ -58,17 +64,17 @@ func fetchStaticData() ([]*treeview.TreeNode, map[string]*NodeData, error) {
 	}
 
 	// Helper function to recursively build the tree and assign IDs.
-	var buildTree func(node *treeview.TreeNode, path string)
-	buildTree = func(node *treeview.TreeNode, path string) {
-		node.ID = generateNodeID(path, node.Label)
+	var buildTree func(tn *treeview.TreeNode, path string)
+	buildTree = func(tn *treeview.TreeNode, path string) {
+		tn.ID = generateNodeID(path, tn.Label)
 
-		if len(node.Children) == 0 {
+		if len(tn.Children) == 0 {
 			// Leaf node: assign data.
 			pid := rand.Intn(9000) + 1000 // Random PID between 1000 and 9999.
 			initialCPUUsage := rand.Intn(100)
 			initialMemoryUsage := rand.Intn(100)
 			data := &NodeData{
-				Label:           node.Label,
+				Label:           tn.Label,
 				PID:             pid,
 				CPUUsage:        []int{},
 				MemoryUsage:     initialMemoryUsage,
@@ -80,11 +86,11 @@ func fetchStaticData() ([]*treeview.TreeNode, map[string]*NodeData, error) {
 				data.LastCPUUsage = generateNextValue(data.LastCPUUsage)
 				data.CPUUsage = append(data.CPUUsage, data.LastCPUUsage)
 			}
-			nodeDataMap[node.ID] = data
+			nodeDataMap[tn.ID] = data
 		} else {
 			// Recursively assign IDs to child nodes.
-			for _, child := range node.Children {
-				buildTree(child, node.ID)
+			for _, child := range tn.Children {
+				buildTree(child, tn.ID)
 			}
 		}
 	}
@@ -168,7 +174,6 @@ func main() {
 	spark, err := sparkline.New(
 		sparkline.Color(cell.ColorBlue),
 		sparkline.Label("CPU Usage"),
-		// Removed sparkline.Max(100) as it's not available
 	)
 	if err != nil {
 		log.Fatalf("failed to create sparkline widget: %v", err)
@@ -185,9 +190,9 @@ func main() {
 	var mu sync.Mutex
 	var selectedNodeID string
 
-	// Create Treeview widget with logging enabled for debugging.
+	// Create TreeView widget with logging enabled for debugging.
 	tv, err := treeview.New(
-		treeview.Label("Applications Treeview"),
+		treeview.Label("Applications TreeView"),
 		treeview.Nodes(processTree...),
 		treeview.LabelColor(cell.ColorBlue),
 		treeview.CollapsedIcon("▶"),
@@ -199,21 +204,21 @@ func main() {
 		treeview.EnableLogging(false),
 	)
 	if err != nil {
-		log.Fatalf("failed to create treeview: %v", err)
+		log.Fatalf("failed to create TreeView: %v", err)
 	}
 
 	// Assign OnClick handlers to leaf nodes only.
-	var assignOnClick func(node *treeview.TreeNode)
-	assignOnClick = func(node *treeview.TreeNode) {
+	var assignOnClick func(tn *treeview.TreeNode)
+	assignOnClick = func(tn *treeview.TreeNode) {
 		// Assign OnClick only to leaf nodes.
-		if len(node.Children) == 0 {
-			node := node // Capture range variable.
-			node.OnClick = func() error {
+		if len(tn.Children) == 0 {
+			tn := tn // Capture range variable.
+			tn.OnClick = func() error {
 				mu.Lock()
-				selectedNodeID = node.ID
+				selectedNodeID = tn.ID
 				mu.Unlock()
 
-				data := nodeDataMap[node.ID]
+				data := nodeDataMap[tn.ID]
 				if data != nil {
 					updateWidgets(data, memDonut, spark, detailText)
 				} else {
@@ -221,7 +226,7 @@ func main() {
 					spark.Add([]int{0})
 					memDonut.Percent(0)
 					detailText.Reset()
-					detailText.Write(fmt.Sprintf("Selected Node: %s\n", node.Label))
+					detailText.Write(fmt.Sprintf("Selected Node: %s\n", tn.Label))
 					detailText.Write("No data available for this node.")
 				}
 
@@ -231,13 +236,13 @@ func main() {
 				return nil
 			}
 		}
-		for _, child := range node.Children {
+		for _, child := range tn.Children {
 			assignOnClick(child)
 		}
 	}
 
-	for _, node := range processTree {
-		assignOnClick(node)
+	for _, tn := range processTree {
+		assignOnClick(tn)
 	}
 
 	// Build grid layout.
@@ -247,8 +252,8 @@ func main() {
 			grid.ColWidthPerc(40,
 				grid.Widget(tv,
 					container.Border(linestyle.Light),
-					container.BorderTitle("Applications Treeview"),
-					container.Focused(), // Set initial focus to the treeview
+					container.BorderTitle("Applications TreeView"),
+					container.Focused(), // Set initial focus to the TreeView
 				),
 			),
 			grid.ColWidthPerc(30,
