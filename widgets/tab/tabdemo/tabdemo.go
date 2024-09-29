@@ -1,4 +1,4 @@
-// main.go
+// Package main provides a system monitor application using tabbed interfaces.
 package main
 
 import (
@@ -22,21 +22,23 @@ import (
 )
 
 func main() {
-	// Initialize Terminal using tcell
+	// Initialize Terminal using tcell.
 	term, err := tcell.New()
 	if err != nil {
 		log.Fatalf("failed to initialize terminal: %v", err)
 	}
 	defer term.Close()
 
-	// Create instructions text widget
+	// Create instructions text widget.
 	instructionsText, err := text.New()
 	if err != nil {
 		log.Fatalf("failed to create instructions text widget: %v", err)
 	}
-	instructionsText.Write("Use Tab, Left/Right Arrow keys to navigate tabs. Press 'q', Esc, or Ctrl+C to exit.")
+	if err := instructionsText.Write("Use Tab, Left/Right Arrow keys to navigate tabs. Press 'q', Esc, or Ctrl+C to exit."); err != nil {
+		log.Fatalf("failed to write instructions: %v", err)
+	}
 
-	// Create PID Text Widget once with built-in rolling
+	// Create PID Text Widget with built-in rolling.
 	pidText, err := text.New(
 		text.WrapAtWords(),
 		text.RollContent(),
@@ -45,22 +47,23 @@ func main() {
 		log.Fatalf("failed to create PID text widget: %v", err)
 	}
 
-	// Create TabManager
-	tabManager := tab.NewTabManager()
+	// Create Manager.
+	tabManager := tab.NewManager()
 
-	// Create options
+	// Create options.
 	opts := tab.NewOptions(
-		tab.ActiveIcon("⦿"),                   // Custom active icon
-		tab.InactiveIcon("○"),                 // Custom inactive icon
-		tab.NotificationIcon("⚠"),             // Custom notification icon
-		tab.EnableLogging(false),              // Enable logging
-		tab.LabelColor(cell.ColorYellow),      // Custom label color
-		tab.ActiveTabColor(cell.ColorBlue),    // Active tab background color
-		tab.InactiveTabColor(cell.ColorBlack), // Inactive tab background color
-		tab.FollowNotifications(true),         // Enable following notifications
+		tab.ActiveIcon("⦿"),                   // Custom active icon.
+		tab.InactiveIcon("○"),                 // Custom inactive icon.
+		tab.NotificationIcon("⚠"),             // Custom notification icon.
+		tab.EnableLogging(false),              // Enable logging.
+		tab.LabelColor(cell.ColorYellow),      // Custom label color.
+		tab.ActiveTabColor(cell.ColorBlue),    // Active tab background color.
+		tab.InactiveTabColor(cell.ColorBlack), // Inactive tab background color.
+		tab.FollowNotifications(true),         // Enable following notifications.
 	)
 
-	// Create Widgets
+	// Create Widgets for CPU, GPU, Memory, Storage, Network.
+
 	// CPU Widgets
 	cpuGauge, err := gauge.New(
 		gauge.Color(cell.ColorGreen),
@@ -89,6 +92,13 @@ func main() {
 	)
 	if err != nil {
 		log.Fatalf("failed to create GPU donut: %v", err)
+	}
+	gpuDetailsText, err := text.New(text.WrapAtWords())
+	if err != nil {
+		log.Fatalf("failed to create GPU details text widget: %v", err)
+	}
+	if err := gpuDetailsText.Write("GPU Details"); err != nil {
+		log.Fatalf("failed to write GPU details: %v", err)
 	}
 
 	// Memory Widgets
@@ -171,12 +181,6 @@ func main() {
 	tabManager.AddTab(tabCPU)
 
 	// Tab 2: GPU
-	gpuDetailsText, err := text.New(text.WrapAtWords())
-	if err != nil {
-		log.Fatalf("failed to create GPU details text widget: %v", err)
-	}
-	gpuDetailsText.Write("GPU Details")
-
 	tabGPU := &tab.Tab{
 		Name: "GPU",
 		Content: container.SplitHorizontal(
@@ -262,8 +266,8 @@ func main() {
 	}
 	tabManager.AddTab(tabNetwork)
 
-	// Create TabHeader
-	tabHeader, err := tab.NewTabHeader(tabManager, opts)
+	// Create Header
+	tabHeader, err := tab.NewHeader(tabManager, opts)
 	if err != nil {
 		log.Fatalf("failed to create tab header: %v", err)
 	}
@@ -273,7 +277,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create initial content widget: %v", err)
 	}
-	initialContent.Write("Select a tab to view its content.")
+	if err := initialContent.Write("Select a tab to view its content."); err != nil {
+		log.Fatalf("failed to write initial content: %v", err)
+	}
 
 	// Create main container with tab header, tab content, and instructions
 	cont, err := container.New(
@@ -303,8 +309,8 @@ func main() {
 		log.Fatalf("failed to create container: %v", err)
 	}
 
-	// Create TabContent and set the active tab's content
-	tabContent := tab.NewTabContent(tabManager)
+	// Create Content and set the active tab's content
+	tabContent := tab.NewContent(tabManager)
 	err = tabContent.Update(cont)
 	if err != nil {
 		log.Fatalf("failed to update tab content: %v", err)
@@ -314,8 +320,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Initialize TabEventHandler for keyboard and mouse events
-	tabEventHandler := tab.NewTabEventHandler(
+	// Initialize EventHandler for keyboard and mouse events
+	tabEventHandler := tab.NewEventHandler(
 		ctx, // Pass the context here
 		term,
 		tabManager,
@@ -328,7 +334,8 @@ func main() {
 
 	// Start a goroutine to simulate data updates
 	go func() {
-		rand.Seed(time.Now().UnixNano())
+		// Use a local random number generator
+		rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 		// Data buffers for smooth scrolling
 		gpuData := make([]float64, 0)
@@ -352,10 +359,6 @@ func main() {
 		// Application names for simulation
 		appNames := []string{"Chrome", "VSCode", "Terminal", "Slack", "Spotify", "Docker", "Mail", "Zoom", "Notepad"}
 
-		// Simulate notification alarms
-		notificationTicker := time.NewTicker(10 * time.Second)
-		defer notificationTicker.Stop()
-
 		for {
 			select {
 			case <-ctx.Done():
@@ -364,15 +367,19 @@ func main() {
 				currentTime := time.Now().Format("15:04:05")
 
 				// Simulate CPU usage
-				cpuUsage := rand.Float64() * 100
-				cpuGauge.Percent(int(cpuUsage), gauge.TextLabel(fmt.Sprintf("%.2f%%", cpuUsage)))
+				cpuUsage := rnd.Float64() * 100
+				if err := cpuGauge.Percent(int(cpuUsage), gauge.TextLabel(fmt.Sprintf("%.2f%%", cpuUsage))); err != nil {
+					log.Printf("failed to update CPU gauge: %v", err)
+				}
 
 				cpuText.Reset()
-				cpuText.Write(fmt.Sprintf("CPU Usage: %.2f%%", cpuUsage))
+				if err := cpuText.Write(fmt.Sprintf("CPU Usage: %.2f%%", cpuUsage)); err != nil {
+					log.Printf("failed to write CPU text: %v", err)
+				}
 
 				// Simulate PIDs and application names
-				pid := rand.Intn(10000)
-				appName := appNames[rand.Intn(len(appNames))]
+				pid := rnd.Intn(10000)
+				appName := appNames[rnd.Intn(len(appNames))]
 				line := fmt.Sprintf("PID %d: %s", pid, appName)
 
 				// Append to pidLines and trim if necessary
@@ -383,11 +390,15 @@ func main() {
 
 				// Update the pidText widget
 				pidText.Reset()
-				pidText.Write(strings.Join(pidLines, "\n"))
+				if err := pidText.Write(strings.Join(pidLines, "\n")); err != nil {
+					log.Printf("failed to write PID text: %v", err)
+				}
 
 				// Simulate GPU usage
-				gpuUsage := rand.Float64() * 100
-				gpuDonut.Percent(int(gpuUsage), donut.Label(fmt.Sprintf("%.2f%%", gpuUsage)))
+				gpuUsage := rnd.Float64() * 100
+				if err := gpuDonut.Percent(int(gpuUsage), donut.Label(fmt.Sprintf("%.2f%%", gpuUsage))); err != nil {
+					log.Printf("failed to update GPU donut: %v", err)
+				}
 
 				if len(gpuData) >= maxDataPoints {
 					gpuData = gpuData[1:]
@@ -410,7 +421,7 @@ func main() {
 				}
 
 				// Simulate Memory usage
-				memUsage := rand.Float64() * 100
+				memUsage := rnd.Float64() * 100
 				if len(memData) >= maxDataPoints {
 					memData = memData[1:]
 					memTimestamps = memTimestamps[1:]
@@ -431,10 +442,12 @@ func main() {
 					log.Printf("failed to update Memory line chart: %v", err)
 				}
 				memText.Reset()
-				memText.Write(fmt.Sprintf("Memory Usage: %.2f%%", memUsage))
+				if err := memText.Write(fmt.Sprintf("Memory Usage: %.2f%%", memUsage)); err != nil {
+					log.Printf("failed to write Memory text: %v", err)
+				}
 
 				// Simulate Storage activity
-				storageActivity := rand.Float64() * 100
+				storageActivity := rnd.Float64() * 100
 				if len(storageData) >= maxDataPoints {
 					storageData = storageData[1:]
 					storageTimestamps = storageTimestamps[1:]
@@ -459,13 +472,15 @@ func main() {
 				driveNames := []string{"Drive A", "Drive B", "Drive C"}
 				driveCapacities := []float64{500, 1000, 2000} // in GB
 				for i, name := range driveNames {
-					used := rand.Float64() * driveCapacities[i]
+					used := rnd.Float64() * driveCapacities[i]
 					percentUsed := (used / driveCapacities[i]) * 100
-					storageText.Write(fmt.Sprintf("%s: Used %.2fGB / %.0fGB (%.2f%%)\n", name, used, driveCapacities[i], percentUsed))
+					if err := storageText.Write(fmt.Sprintf("%s: Used %.2fGB / %.0fGB (%.2f%%)\n", name, used, driveCapacities[i], percentUsed)); err != nil {
+						log.Printf("failed to write storage text: %v", err)
+					}
 				}
 
 				// Simulate Network traffic
-				networkTraffic := rand.Float64() * 1000 // Mbps
+				networkTraffic := rnd.Float64() * 1000 // Mbps
 				if len(netData) >= maxDataPoints {
 					netData = netData[1:]
 					netTimestamps = netTimestamps[1:]
@@ -486,7 +501,9 @@ func main() {
 					log.Printf("failed to update Network line chart: %v", err)
 				}
 				networkText.Reset()
-				networkText.Write(fmt.Sprintf("Network Traffic: %.2f Mbps", networkTraffic))
+				if err := networkText.Write(fmt.Sprintf("Network Traffic: %.2f Mbps", networkTraffic)); err != nil {
+					log.Printf("failed to write network text: %v", err)
+				}
 
 				// Sleep before next update
 				time.Sleep(500 * time.Millisecond)
@@ -496,7 +513,8 @@ func main() {
 
 	// Start a goroutine to periodically trigger tab notifications
 	go func() {
-		rand.Seed(time.Now().UnixNano())
+		// Use a local random number generator
+		rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 		ticker := time.NewTicker(10 * time.Second) // Every 10 seconds
 		defer ticker.Stop()
 
@@ -509,7 +527,7 @@ func main() {
 				if numTabs == 0 {
 					continue
 				}
-				randomIndex := rand.Intn(numTabs)
+				randomIndex := rnd.Intn(numTabs)
 				// Set notification to true
 				tabManager.SetNotification(randomIndex, true, 5*time.Second)
 				if err := tabHeader.Update(); err != nil {

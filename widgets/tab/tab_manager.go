@@ -1,4 +1,4 @@
-// tab/tab_manager.go
+// Package tab provides functionality for managing tabbed interfaces.
 package tab
 
 import (
@@ -10,11 +10,11 @@ import (
 
 // Tab represents a single tab with a name and content.
 type Tab struct {
-	Name                 string
-	Content              container.Option
-	Notification         bool          // Field to track notification state
-	notifyTime           time.Time     // Timestamp when the notification was set
-	notificationDuration time.Duration // Duration of the notification
+	Name                 string           // Name of the tab.
+	Content              container.Option // Content to display when the tab is active.
+	Notification         bool             // Indicates if the tab has a notification.
+	notifyTime           time.Time        // Timestamp when the notification was set.
+	notificationDuration time.Duration    // Duration of the notification.
 }
 
 // SetNotification sets the notification state of the tab with a duration.
@@ -40,94 +40,91 @@ func (t *Tab) HasNotification() bool {
 	return false
 }
 
-// TabManager manages multiple tabs and the active tab index.
-type TabManager struct {
-	tabs        []*Tab
-	activeIndex int
-	mu          sync.Mutex
+// Manager handles multiple tabs and the active tab index.
+type Manager struct {
+	tabs        []*Tab     // Slice of tabs managed by the Manager.
+	activeIndex int        // Index of the currently active tab.
+	mu          sync.Mutex // Mutex to protect concurrent access.
 }
 
-// NewTabManager creates a new TabManager.
-func NewTabManager() *TabManager {
-	return &TabManager{
+// NewManager creates a new Manager.
+func NewManager() *Manager {
+	return &Manager{
 		tabs:        []*Tab{},
 		activeIndex: 0,
 	}
 }
 
 // AddTab adds a new tab to the manager.
-func (tm *TabManager) AddTab(tab *Tab) {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	tm.tabs = append(tm.tabs, tab)
+func (m *Manager) AddTab(tab *Tab) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tabs = append(m.tabs, tab)
 }
 
 // NextTab switches to the next tab.
-func (tm *TabManager) NextTab() {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	if len(tm.tabs) == 0 {
+func (m *Manager) NextTab() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.tabs) == 0 {
 		return
 	}
-	tm.activeIndex = (tm.activeIndex + 1) % len(tm.tabs)
+	m.activeIndex = (m.activeIndex + 1) % len(m.tabs)
 }
 
 // PreviousTab switches to the previous tab.
-func (tm *TabManager) PreviousTab() {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	if len(tm.tabs) == 0 {
+func (m *Manager) PreviousTab() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.tabs) == 0 {
 		return
 	}
-	tm.activeIndex = (tm.activeIndex - 1 + len(tm.tabs)) % len(tm.tabs)
+	m.activeIndex = (m.activeIndex - 1 + len(m.tabs)) % len(m.tabs)
 }
 
 // GetActiveTab returns the currently active tab.
-func (tm *TabManager) GetActiveTab() *Tab {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	if len(tm.tabs) == 0 {
+func (m *Manager) GetActiveTab() *Tab {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.tabs) == 0 {
 		return nil
 	}
-	return tm.tabs[tm.activeIndex]
+	return m.tabs[m.activeIndex]
 }
 
 // GetTabNum returns the total number of tabs.
-func (tm *TabManager) GetTabNum() int {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	return len(tm.tabs)
+func (m *Manager) GetTabNum() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.tabs)
 }
 
 // GetTabNames returns the names of all tabs.
-func (tm *TabManager) GetTabNames() []string {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	names := make([]string, len(tm.tabs))
-	for i, tab := range tm.tabs {
+func (m *Manager) GetTabNames() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	names := make([]string, len(m.tabs))
+	for i, tab := range m.tabs {
 		names[i] = tab.Name
 	}
 	return names
 }
 
-// GetTabNames returns the name of the tab with index x.
-func (tm *TabManager) GetTabName(index int) string {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	var name string
-	for i, tab := range tm.tabs {
-		if i == index {
-			name = tab.Name
-		}
+// GetTabName returns the name of the tab at the specified index.
+func (m *Manager) GetTabName(index int) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if index >= 0 && index < len(m.tabs) {
+		return m.tabs[index].Name
 	}
-	return name
+	return ""
 }
 
 // GetTabIndex returns the index of a given tab.
-func (tm *TabManager) GetTabIndex(targetTab *Tab) int {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	for index, tab := range tm.tabs {
+func (m *Manager) GetTabIndex(targetTab *Tab) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for index, tab := range m.tabs {
 		if tab == targetTab {
 			return index
 		}
@@ -136,37 +133,37 @@ func (tm *TabManager) GetTabIndex(targetTab *Tab) int {
 }
 
 // GetActiveIndex returns the index of the active tab.
-func (tm *TabManager) GetActiveIndex() int {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	return tm.activeIndex
+func (m *Manager) GetActiveIndex() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.activeIndex
 }
 
 // SetActiveTab sets the active tab to the specified index.
-func (tm *TabManager) SetActiveTab(index int) {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	if index >= 0 && index < len(tm.tabs) {
-		tm.activeIndex = index
+func (m *Manager) SetActiveTab(index int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if index >= 0 && index < len(m.tabs) {
+		m.activeIndex = index
 		// Do not clear the notification here; let it expire naturally.
 	}
 }
 
 // SetNotification sets the notification state for the specified tab with a duration.
-func (tm *TabManager) SetNotification(index int, hasNotification bool, duration time.Duration) {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	if index >= 0 && index < len(tm.tabs) {
-		tm.tabs[index].SetNotification(hasNotification, duration)
+func (m *Manager) SetNotification(index int, hasNotification bool, duration time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if index >= 0 && index < len(m.tabs) {
+		m.tabs[index].SetNotification(hasNotification, duration)
 	}
 }
 
 // GetNotifiedTabs returns a list of tabs with active notifications.
-func (tm *TabManager) GetNotifiedTabs() []*Tab {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+func (m *Manager) GetNotifiedTabs() []*Tab {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	var notifiedTabs []*Tab
-	for _, tab := range tm.tabs {
+	for _, tab := range m.tabs {
 		if tab.HasNotification() {
 			notifiedTabs = append(notifiedTabs, tab)
 		}

@@ -1,4 +1,4 @@
-// tab/test_tab.go
+// Package tab contains tests for the tabbed interface using Termdash.
 package tab
 
 import (
@@ -32,9 +32,9 @@ func (m *mockTerminal) HideCursor()                                             
 func (m *mockTerminal) SetCell(i image.Point, r rune, opts ...cell.Option) error { return nil }
 func (m *mockTerminal) SetCursor(p image.Point)                                  {}
 
-// TestTabManager verifies the functionality of TabManager.
-func TestTabManager(t *testing.T) {
-	tm := NewTabManager()
+// TestManager verifies the functionality of Manager.
+func TestManager(t *testing.T) {
+	tm := NewManager()
 
 	// Create dummy content widgets
 	text1, err := text.New(text.WrapAtWords())
@@ -85,9 +85,9 @@ func TestTabManager(t *testing.T) {
 	}
 }
 
-// TestTabHeader verifies that TabHeader correctly displays active and inactive tabs.
-func TestTabHeader(t *testing.T) {
-	tm := NewTabManager()
+// TestHeader verifies that Header correctly displays active and inactive tabs.
+func TestHeader(t *testing.T) {
+	tm := NewManager()
 	// Create options
 	opts := NewOptions(
 		ActiveIcon("⦿"),                   // Custom active icon
@@ -113,9 +113,9 @@ func TestTabHeader(t *testing.T) {
 	tm.AddTab(tab1)
 	tm.AddTab(tab2)
 
-	th, err := NewTabHeader(tm, opts)
+	th, err := NewHeader(tm, opts)
 	if err != nil {
-		t.Fatalf("failed to create TabHeader: %v", err)
+		t.Fatalf("failed to create Header: %v", err)
 	}
 	tw := th.Widget()
 	if tw == nil {
@@ -130,14 +130,14 @@ func TestTabHeader(t *testing.T) {
 	// Change active tab
 	tm.NextTab()
 	if err := th.Update(); err != nil {
-		t.Fatalf("failed to update TabHeader: %v", err)
+		t.Fatalf("failed to update Header: %v", err)
 	}
 
 }
 
-// TestTabContent verifies that TabContent correctly updates the container with the active tab's content.
-func TestTabContent(t *testing.T) {
-	tm := NewTabManager()
+// TestContent verifies that Content correctly updates the container with the active tab's content.
+func TestContent(t *testing.T) {
+	tm := NewManager()
 	opts := NewOptions(
 		ActiveIcon("⦿"),                   // Custom active icon
 		InactiveIcon("○"),                 // Custom inactive icon
@@ -165,9 +165,9 @@ func TestTabContent(t *testing.T) {
 	tm.AddTab(tab1)
 	tm.AddTab(tab2)
 
-	th, err := NewTabHeader(tm, opts)
+	th, err := NewHeader(tm, opts)
 	if err != nil {
-		t.Fatalf("failed to create TabHeader: %v", err)
+		t.Fatalf("failed to create Header: %v", err)
 	}
 
 	if th != nil {
@@ -181,10 +181,10 @@ func TestTabContent(t *testing.T) {
 			}
 		}
 	} else {
-		t.Fatalf("TabHeader (th) is nil")
+		t.Fatalf("Header (th) is nil")
 	}
 
-	tc := NewTabContent(tm)
+	tc := NewContent(tm)
 
 	// Create a mock terminal
 	term := &mockTerminal{}
@@ -196,10 +196,10 @@ func TestTabContent(t *testing.T) {
 		t.Fatalf("failed to create container: %v", err)
 	}
 
-	// Update TabContent with initial active tab
+	// Update Content with initial active tab
 	err = tc.Update(cont)
 	if err != nil {
-		t.Fatalf("failed to update TabContent: %v", err)
+		t.Fatalf("failed to update Content: %v", err)
 	}
 
 	// Since container.Container does not have a Get method, ensure no errors occurred
@@ -208,15 +208,15 @@ func TestTabContent(t *testing.T) {
 	tm.NextTab()
 	err = tc.Update(cont)
 	if err != nil {
-		t.Fatalf("failed to update TabContent after switching tabs: %v", err)
+		t.Fatalf("failed to update Content after switching tabs: %v", err)
 	}
 
 	// No direct way to verify content; ensure no errors
 }
 
-// TestTabEventHandler_HandleKeyboard verifies that TabEventHandler correctly responds to keyboard events.
-func TestTabEventHandler_HandleKeyboard(t *testing.T) {
-	tm := NewTabManager()
+// TestEventHandler_HandleKeyboard verifies that EventHandler correctly responds to keyboard events.
+func TestEventHandler_HandleKeyboard(t *testing.T) {
+	tm := NewManager()
 	opts := NewOptions(
 		ActiveIcon("⦿"),                   // Custom active icon
 		InactiveIcon("○"),                 // Custom inactive icon
@@ -241,12 +241,12 @@ func TestTabEventHandler_HandleKeyboard(t *testing.T) {
 	tm.AddTab(tab1)
 	tm.AddTab(tab2)
 
-	th, err := NewTabHeader(tm, opts)
+	th, err := NewHeader(tm, opts)
 	if err != nil {
-		t.Fatalf("failed to create TabHeader: %v", err)
+		t.Fatalf("failed to create Header: %v", err)
 	}
 
-	tc := NewTabContent(tm)
+	tc := NewContent(tm)
 
 	// Create a mock terminal
 	term := &mockTerminal{}
@@ -258,18 +258,18 @@ func TestTabEventHandler_HandleKeyboard(t *testing.T) {
 		t.Fatalf("failed to create container: %v", err)
 	}
 
-	// Update TabContent with initial active tab
+	// Update Content with initial active tab
 	err = tc.Update(cont)
 	if err != nil {
-		t.Fatalf("failed to update TabContent: %v", err)
+		t.Fatalf("failed to update Content: %v", err)
 	}
 
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Create TabEventHandler with context
-	teh := NewTabEventHandler(ctx, term, tm, th, tc, cont, cancel, opts)
+	// Create EventHandler with context
+	teh := NewEventHandler(ctx, term, tm, th, tc, cont, cancel, opts)
 
 	// Simulate Tab key press to switch to Tab2
 	tabKey := &terminalapi.Keyboard{Key: keyboard.KeyTab}
@@ -302,10 +302,10 @@ func TestTabEventHandler_HandleKeyboard(t *testing.T) {
 	}
 }
 
-// TestTabManagerNotifications verifies that notifications are set, displayed, and expire as expected.
-func TestTabManagerNotifications(t *testing.T) {
-	// Setup TabManager and tabs
-	tm := NewTabManager()
+// TestManagerNotifications verifies that notifications are set, displayed, and expire as expected.
+func TestManagerNotifications(t *testing.T) {
+	// Setup Manager and tabs
+	tm := NewManager()
 	text1, err := text.New(text.WrapAtWords())
 	if err != nil {
 		t.Fatalf("failed to create text widget: %v", err)

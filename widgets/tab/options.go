@@ -1,4 +1,4 @@
-// options.go
+// Package tab provides configuration options for the tabbed interface.
 package tab
 
 import "github.com/mum4k/termdash/cell"
@@ -11,20 +11,20 @@ type Option interface {
 
 // Options holds the configuration for the Tab.
 type Options struct {
-	Tabs                []*Tab
-	LabelColor          cell.Color
-	ActiveTabColor      cell.Color
-	InactiveTabColor    cell.Color
-	ActiveIcon          string
-	InactiveIcon        string
-	NotificationIcon    string
-	EnableLogging       bool
-	FollowNotifications bool // Whether to follow notifications automatically
+	Tabs                []*Tab     // List of tabs.
+	LabelColor          cell.Color // Color of the tab labels.
+	ActiveTabColor      cell.Color // Background color of the active tab.
+	InactiveTabColor    cell.Color // Background color of inactive tabs.
+	ActiveIcon          string     // Icon for active tabs.
+	InactiveIcon        string     // Icon for inactive tabs.
+	NotificationIcon    string     // Icon for tabs with notifications.
+	EnableLogging       bool       // Enables logging for debugging.
+	FollowNotifications bool       // Whether to follow notifications automatically.
 }
 
-// newOptions initializes default options.
-func newOptions() *Options {
-	return &Options{
+// NewOptions initializes default options or applies provided options.
+func NewOptions(opts ...Option) *Options {
+	o := &Options{
 		Tabs:                []*Tab{},
 		LabelColor:          cell.ColorWhite,
 		ActiveTabColor:      cell.ColorBlue,
@@ -32,9 +32,13 @@ func newOptions() *Options {
 		ActiveIcon:          "⦿",
 		InactiveIcon:        "○",
 		NotificationIcon:    "⚠",
-		EnableLogging:       false, // Default to false
-		FollowNotifications: false, // Default to false
+		EnableLogging:       false,
+		FollowNotifications: false,
 	}
+	for _, opt := range opts {
+		opt.set(o)
+	}
+	return o
 }
 
 // option is a function that modifies Options.
@@ -45,15 +49,6 @@ func (o option) set(opts *Options) {
 	o(opts)
 }
 
-// NewOptions creates a new Options struct with the given options applied.
-func NewOptions(opts ...Option) *Options {
-	o := newOptions()
-	for _, opt := range opts {
-		opt.set(o)
-	}
-	return o
-}
-
 // Tabs sets the root tabs of the Tab widget.
 func Tabs(tabs ...*Tab) Option {
 	return option(func(o *Options) {
@@ -61,21 +56,21 @@ func Tabs(tabs ...*Tab) Option {
 	})
 }
 
-// ActiveIcon sets custom icons for the active state
+// ActiveIcon sets custom icons for the active state.
 func ActiveIcon(active string) Option {
 	return option(func(o *Options) {
 		o.ActiveIcon = active
 	})
 }
 
-// ActiveIcon sets custom icons for the active state
+// InactiveIcon sets custom icons for the inactive state.
 func InactiveIcon(inactive string) Option {
 	return option(func(o *Options) {
 		o.InactiveIcon = inactive
 	})
 }
 
-// ActiveIcon sets custom icons for the active state
+// NotificationIcon sets custom icons for notifications.
 func NotificationIcon(notification string) Option {
 	return option(func(o *Options) {
 		o.NotificationIcon = notification
@@ -89,14 +84,14 @@ func LabelColor(color cell.Color) Option {
 	})
 }
 
-// ActiveTabColor sets the color of the active tab.
+// ActiveTabColor sets the background color of the active tab.
 func ActiveTabColor(color cell.Color) Option {
 	return option(func(o *Options) {
 		o.ActiveTabColor = color
 	})
 }
 
-// ActiveTabColor sets the color of the inactive tabs.
+// InactiveTabColor sets the background color of inactive tabs.
 func InactiveTabColor(color cell.Color) Option {
 	return option(func(o *Options) {
 		o.InactiveTabColor = color

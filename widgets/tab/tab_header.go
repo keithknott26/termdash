@@ -1,4 +1,4 @@
-// tab/tab_header.go
+// Package tab provides functionality for managing tabbed interfaces.
 package tab
 
 import (
@@ -10,175 +10,136 @@ import (
 	"github.com/mum4k/termdash/widgets/text"
 )
 
-// TabHeader displays the tab names and highlights the active tab.
-type TabHeader struct {
-	tm            *TabManager
-	widget        *text.Text
-	tabRectangles []image.Rectangle // New field to track tab positions
-	height        int               // Stores the height of the TabHeader
-	opts          *Options
+// Header displays the tab names and highlights the active tab.
+type Header struct {
+	tm            *Manager          // Reference to the Tab Manager.
+	widget        *text.Text        // Text widget for displaying the header.
+	tabRectangles []image.Rectangle // Tracks the positions of tabs for mouse interactions.
+	height        int               // Stores the height of the Header.
+	opts          *Options          // Configuration options for the Header.
 }
 
-// NewTabHeader creates a new TabHeader.
-func NewTabHeader(tm *TabManager, opts *Options) (*TabHeader, error) {
+// NewHeader creates a new Header.
+func NewHeader(tm *Manager, opts *Options) (*Header, error) {
 	w, err := text.New(
-		text.WrapAtRunes(),      // Use WrapAtRunes for accurate width calculations
-		text.DisableScrolling(), // Disable scrolling to keep the header static
+		text.WrapAtRunes(),      // Use WrapAtRunes for accurate width calculations.
+		text.DisableScrolling(), // Disable scrolling to keep the header static.
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	// If opts is nil, create default options
+	// If opts is nil, create default options.
 	if opts == nil {
-		opts = NewOptions(
-			LabelColor(cell.ColorWhite),
-			ActiveTabColor(cell.ColorBlue),
-			InactiveTabColor(cell.ColorBlack),
-			ActiveIcon("⦿"),
-			InactiveIcon("○"),
-			NotificationIcon("⚠"),
-			EnableLogging(false),
-		)
+		opts = NewOptions()
 	}
 
-	th := &TabHeader{
+	header := &Header{
 		tm:     tm,
 		widget: w,
-		height: 2, // Assuming it occupies 2 lines (tabs and underline)
+		height: 2, // Assuming it occupies 2 lines (tabs and underline).
 		opts:   opts,
 	}
 
-	if err := th.Update(); err != nil {
+	if err := header.Update(); err != nil {
 		return nil, err
 	}
 
-	return th, nil
+	return header, nil
 }
 
-// update refreshes the tab header display.
-func (th *TabHeader) update() error {
-	tabNames := th.tm.GetTabNames()
-	activeIndex := th.tm.GetActiveIndex()
+// Update refreshes the tab header to reflect changes.
+func (h *Header) Update() error {
+	tabNames := h.tm.GetTabNames()
+	activeIndex := h.tm.GetActiveIndex()
 
-	th.widget.Reset()
-	th.tabRectangles = make([]image.Rectangle, 0, len(tabNames)) // Initialize
+	h.widget.Reset()
+	h.tabRectangles = make([]image.Rectangle, 0, len(tabNames)) // Initialize.
 
 	currentX := 1
-
-	// Build the tabs with styling
 	var totalWidth int
 
-	for i := range tabNames {
-		// Determine icons
+	for i, tabName := range tabNames {
+		// Determine icons.
 		var notificationIcon string
-		if th.tm.tabs[i].Notification {
-			notificationIcon = th.opts.NotificationIcon
+		if h.tm.tabs[i].HasNotification() {
+			notificationIcon = h.opts.NotificationIcon
 		} else {
-			notificationIcon = " " // Empty space if no notification
+			notificationIcon = " " // Empty space if no notification.
 		}
 
 		var stateIcon string
-		if i == th.tm.GetActiveIndex() {
-			stateIcon = th.opts.ActiveIcon
+		if i == activeIndex {
+			stateIcon = h.opts.ActiveIcon
 		} else {
-			stateIcon = th.opts.InactiveIcon
+			stateIcon = h.opts.InactiveIcon
 		}
-		// Construct tab label with icon and name
-		tabText := fmt.Sprintf("│%s%s %s ", notificationIcon, stateIcon, th.tm.GetTabName(i))
+
+		// Construct tab label with icons and name.
+		tabText := fmt.Sprintf("│%s%s %s ", notificationIcon, stateIcon, tabName)
 		tabWidth := len([]rune(tabText))
 		totalWidth += tabWidth
 
-		// Assuming the TabHeader spans 2 lines (tabs and underline)
-		const tabHeaderHeight = 2
+		// Assuming the Header spans 2 lines (tabs and underline).
+		const headerHeight = 2
 
-		// In your update function
+		// Compute the rectangle for the tab.
 		rect := image.Rectangle{
 			Min: image.Point{X: currentX, Y: 0},
-			Max: image.Point{X: currentX + tabWidth, Y: tabHeaderHeight},
+			Max: image.Point{X: currentX + tabWidth, Y: headerHeight},
 		}
 
-		th.tabRectangles = append(th.tabRectangles, rect)
+		h.tabRectangles = append(h.tabRectangles, rect)
 
 		currentX += tabWidth
 
 		if i == activeIndex {
-			// Active tab styling
-			if err := th.widget.Write(tabText,
-				text.WriteCellOpts(cell.Bold(), cell.FgColor(th.opts.LabelColor), cell.BgColor(th.opts.ActiveTabColor)),
+			// Active tab styling.
+			if err := h.widget.Write(tabText,
+				text.WriteCellOpts(cell.Bold(), cell.FgColor(h.opts.LabelColor), cell.BgColor(h.opts.ActiveTabColor)),
 			); err != nil {
 				return err
 			}
 		} else {
-			// Inactive tab styling
-			if err := th.widget.Write(tabText,
-				text.WriteCellOpts(cell.FgColor(th.opts.LabelColor), cell.BgColor(th.opts.InactiveTabColor)),
+			// Inactive tab styling.
+			if err := h.widget.Write(tabText,
+				text.WriteCellOpts(cell.FgColor(h.opts.LabelColor), cell.BgColor(h.opts.InactiveTabColor)),
 			); err != nil {
 				return err
 			}
 		}
 	}
 
-	// Add the closing border
+	// Add the closing border.
 	closingBorder := "│\n"
 	totalWidth += len([]rune(closingBorder))
-	if err := th.widget.Write(closingBorder, text.WriteCellOpts(cell.FgColor(th.opts.LabelColor))); err != nil {
+	if err := h.widget.Write(closingBorder, text.WriteCellOpts(cell.FgColor(h.opts.LabelColor))); err != nil {
 		return err
 	}
 
-	// Add an underline to separate the tabs from the content
+	// Add an underline to separate the tabs from the content.
 	underline := strings.Repeat("─", totalWidth)
-	if err := th.widget.Write(underline, text.WriteCellOpts(cell.FgColor(th.opts.LabelColor))); err != nil {
+	if err := h.widget.Write(underline, text.WriteCellOpts(cell.FgColor(h.opts.LabelColor))); err != nil {
 		return err
 	}
 
-	return nil
-}
-
-// Update refreshes the tab header to reflect changes.
-func (th *TabHeader) Update() error {
-	th.widget.Reset()
-	for idx, tab := range th.tm.tabs {
-		var icon string
-		var color cell.Color
-		if idx == th.tm.GetActiveIndex() {
-			icon = th.opts.ActiveIcon
-			color = th.opts.ActiveTabColor
-		} else {
-			icon = th.opts.InactiveIcon
-			color = th.opts.InactiveTabColor
-		}
-		label := fmt.Sprintf("%s %s", icon, tab.Name)
-		if err := th.widget.Write(label, text.WriteCellOpts(
-			cell.FgColor(th.opts.LabelColor),
-			cell.BgColor(color),
-		)); err != nil {
-			return err
-		}
-		if idx < len(th.tm.tabs)-1 {
-			if err := th.widget.Write(" | "); err != nil {
-				return err
-			}
-		}
-	}
-	th.update()
 	return nil
 }
 
 // Widget returns the underlying text widget.
-func (th *TabHeader) Widget() *text.Text {
-	return th.widget
+func (h *Header) Widget() *text.Text {
+	return h.widget
 }
 
-// Height returns the height of the TabHeader.
-func (th *TabHeader) Height() int {
-	return th.height
+// Height returns the height of the Header.
+func (h *Header) Height() int {
+	return h.height
 }
 
 // GetClickedTab returns the index of the tab that was clicked based on the mouse position.
 // Returns -1 if no tab was clicked.
-func (th *TabHeader) GetClickedTab(p image.Point) int {
-	for i, rect := range th.tabRectangles {
+func (h *Header) GetClickedTab(p image.Point) int {
+	for i, rect := range h.tabRectangles {
 		if rect.Min.X <= p.X && p.X < rect.Max.X &&
 			rect.Min.Y <= p.Y && p.Y < rect.Max.Y {
 			return i

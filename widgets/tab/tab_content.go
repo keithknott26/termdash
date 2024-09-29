@@ -1,25 +1,25 @@
-// tab/tab_content.go
+// Package tab provides functionality for managing tabbed interfaces.
 package tab
 
 import (
 	"github.com/mum4k/termdash/container"
 )
 
-// TabContent displays the content of the active tab.
-type TabContent struct {
-	tm *TabManager
+// Content displays the content of the active tab.
+type Content struct {
+	tm *Manager // Reference to the Tab Manager.
 }
 
-// NewTabContent creates a new TabContent.
-func NewTabContent(tm *TabManager) *TabContent {
-	return &TabContent{
+// NewContent creates a new Content.
+func NewContent(tm *Manager) *Content {
+	return &Content{
 		tm: tm,
 	}
 }
 
-// Update updates the tab content based on the active tab.
-func (tc *TabContent) Update(cont *container.Container) error {
-	activeTab := tc.tm.GetActiveTab()
+// Update updates the content based on the active tab.
+func (c *Content) Update(cont *container.Container) error {
+	activeTab := c.tm.GetActiveTab()
 	if activeTab == nil {
 		return nil
 	}
